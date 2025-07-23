@@ -1,0 +1,205 @@
+-- Get all active users with their roles
+SELECT 
+    id, name, username, email, role, status, appt, 
+    is_active, is_superuser, created_at
+FROM users 
+WHERE is_active = TRUE
+ORDER BY created_at DESC;
+
+-- Complete organizational hierarchy
+SELECT 
+    c.name as corps_name,
+    d.name as division_name,
+    b.name as brigade_name,
+    u.name as unit_name,
+    COUNT(usr.id) as users_count
+FROM corps c
+LEFT JOIN divs d ON c.id = d.corp_id
+LEFT JOIN brigades b ON d.id = b.div_id
+LEFT JOIN units u ON b.id = u.brigade_id
+LEFT JOIN users usr ON u.id = usr.unit_id
+GROUP BY c.id, c.name, d.id, d.name, b.id, b.name, u.id, u.name
+ORDER BY c.name, d.name, b.name, u.name;
+_____________________________________________________________________________
+
+-- Total inflows by user
+SELECT 
+    u.name as user_name,
+    u.role,
+    COUNT(cf.id) as inflow_count,
+    SUM(cf.amount) as total_inflows,
+    AVG(cf.amount) as avg_inflow_amount
+FROM users u
+LEFT JOIN command_funds cf ON u.id = cf.user_id
+WHERE cf.is_deleted = FALSE
+GROUP BY u.id, u.name, u.role
+HAVING SUM(cf.amount) > 0
+ORDER BY total_inflows DESC;
+
+-- Expense analysis by category
+SELECT 
+    h.heads as category,
+    sh.subheads as subcategory,
+    COUNT(e.id) as expense_count,
+    SUM(e.cost) as total_expenses,
+    AVG(e.cost) as avg_expense_amount
+FROM heads h
+LEFT JOIN sub_heads sh ON h.id = sh.head_id
+LEFT JOIN expenses e ON h.id = e.head_id AND sh.id = e.subhead_id
+WHERE e.is_deleted = FALSE
+GROUP BY h.id, h.heads, sh.id, sh.subheads
+HAVING SUM(e.cost) > 0
+ORDER BY total_expenses DESC;
+
+-- Monthly expense trends
+SELECT 
+    DATE_FORMAT(expense_date, '%Y-%m') as month,
+    COUNT(*) as expense_count,
+    SUM(cost) as total_expenses,
+    AVG(cost) as avg_expense
+FROM expenses
+WHERE is_deleted = FALSE 
+    AND expense_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+GROUP BY DATE_FORMAT(expense_date, '%Y-%m')
+ORDER BY month;
+_________________________________________________________________________
+
+-- IBAN balances by bank
+SELECT 
+    bank_name,
+    COUNT(*) as account_count,
+    SUM(allocated_balance) as total_balance,
+    AVG(allocated_balance) as avg_balance,
+    MIN(allocated_balance) as min_balance,
+    MAX(allocated_balance) as max_balance
+FROM multi_ibn_user
+GROUP BY bank_name
+ORDER BY total_balance DESC;
+
+-- IBAN transfer analysis
+SELECT 
+    from_iban.bank_name as from_bank,
+    to_iban.bank_name as to_bank,
+    COUNT(*) as transfer_count,
+    SUM(it.amount) as total_transferred,
+    AVG(it.amount) as avg_transfer_amount
+FROM iban_transfers it
+JOIN multi_ibn_user from_iban ON it.from_iban_id = from_iban.id
+JOIN multi_ibn_user to_iban ON it.to_iban_id = to_iban.id
+GROUP BY from_iban.bank_name, to_iban.bank_name
+ORDER BY total_transferred DESC;
+_________________________________________________________________________
+-- Asset summary with depreciation
+SELECT 
+    name,
+    type,
+    cost,
+    depreciation_type,
+    depreciation_percentage,
+    purchase_date,
+    DATEDIFF(CURDATE(), purchase_date) as days_owned,
+    CASE 
+        WHEN depreciation_type = 'year wise' THEN 
+            cost * (1 - (depreciation_percentage/100) * (DATEDIFF(CURDATE(), purchase_date)/365))
+        WHEN depreciation_type = 'flat' THEN 
+            cost * (1 - depreciation_percentage/100)
+        ELSE cost
+    END as estimated_current_value
+FROM assets
+WHERE cost IS NOT NULL 
+    AND depreciation_percentage IS NOT NULL
+    AND purchase_date IS NOT NULL
+ORDER BY estimated_current_value DESC;
+___________________________________________________________________________________
+
+-- Investment ROI analysis
+SELECT 
+    i.name as investment_name,
+    i.type,
+    i.amount as initial_amount,
+    COUNT(ih.id) as history_count,
+    MAX(ih.last_balance) as latest_balance,
+    (MAX(ih.last_balance) - i.amount) as gain_loss,
+    ((MAX(ih.last_balance) - i.amount) / i.amount * 100) as roi_percentage
+FROM fixed_assets i
+LEFT JOIN investment_balance_histories ih ON i.id = ih.investment_id
+WHERE i.is_deleted = FALSE
+GROUP BY i.id, i.name, i.type, i.amount
+HAVING history_count > 0
+ORDER BY roi_percentage DESC;
+______________________________________________________________________
+
+-- Liability summary by status
+SELECT 
+    type as liability_type,
+    is_paid,
+    COUNT(*) as liability_count,
+    SUM(amount) as total_amount,
+    SUM(remaining_balance) as total_remaining,
+    AVG(remaining_balance) as avg_remaining
+FROM liabilities
+WHERE is_deleted = FALSE
+GROUP BY type, is_paid
+ORDER BY total_remaining DESC;
+______________________________________________________
+-- Most active users by transaction count
+SELECT 
+    u.name as user_name,
+    u.role,
+    (SELECT COUNT(*) FROM command_funds cf WHERE cf.user_id = u.id AND cf.is_deleted = FALSE) as inflows,
+    (SELECT COUNT(*) FROM expenses e WHERE e.user_id = u.id AND e.is_deleted = FALSE) as expenses,
+    (SELECT COUNT(*) FROM fixed_assets inv WHERE inv.user_id = u.id AND inv.is_deleted = FALSE) as investments,
+    (SELECT COUNT(*) FROM liabilities l WHERE l.user_id = u.id AND l.is_deleted = FALSE) as liabilities,
+    (SELECT COUNT(*) FROM activity_log al WHERE al.causer_id = u.id) as activity_logs
+FROM users u
+WHERE u.is_active = TRUE
+ORDER BY (inflows + expenses + investments + liabilities) DESC;
+_______________________________________________________________
+
+-- User financial dashboard
+SELECT 
+    u.name as user_name,
+    u.role,
+    b.cash_in_hand,
+    b.cash_in_bank,
+    b.balance as total_balance,
+    (SELECT SUM(cf.amount) FROM command_funds cf WHERE cf.user_id = u.id AND cf.is_deleted = FALSE) as total_inflows,
+    (SELECT SUM(e.cost) FROM expenses e WHERE e.user_id = u.id AND e.is_deleted = FALSE) as total_expenses,
+    (SELECT SUM(l.remaining_balance) FROM liabilities l WHERE l.user_id = u.id AND l.is_deleted = FALSE) as total_liabilities
+FROM users u
+LEFT JOIN balances b ON u.id = b.user_id
+WHERE u.is_active = TRUE
+ORDER BY b.balance DESC;
+____________________________________________________
+
+-- Budget variance analysis
+SELECT 
+    h.heads as category,
+    COUNT(DISTINCT cf.id) as budget_entries,
+    SUM(cf.amount) as budgeted_amount,
+    COUNT(DISTINCT e.id) as expense_entries,
+    SUM(e.cost) as actual_spending,
+    (SUM(e.cost) - SUM(cf.amount)) as variance,
+    CASE 
+        WHEN SUM(cf.amount) > 0 THEN ((SUM(e.cost) / SUM(cf.amount)) * 100)
+        ELSE 0 
+    END as spending_percentage
+FROM heads h
+LEFT JOIN command_funds cf ON h.id = cf.head_id AND cf.is_deleted = FALSE
+LEFT JOIN expenses e ON h.id = e.head_id AND e.is_deleted = FALSE
+GROUP BY h.id, h.heads
+HAVING budgeted_amount > 0 OR actual_spending > 0
+ORDER BY variance DESC;
+__________________________________________________________________
+
+-- Database table record counts
+SELECT 
+    'users' as table_name, COUNT(*) as record_count FROM users
+UNION ALL SELECT 'command_funds', COUNT(*) FROM command_funds
+UNION ALL SELECT 'expenses', COUNT(*) FROM expenses
+UNION ALL SELECT 'assets', COUNT(*) FROM assets
+UNION ALL SELECT 'liabilities', COUNT(*) FROM liabilities
+UNION ALL SELECT 'investments', COUNT(*) FROM fixed_assets
+UNION ALL SELECT 'iban_accounts', COUNT(*) FROM multi_ibn_user
+UNION ALL SELECT 'activity_logs', COUNT(*) FROM activity_log
+ORDER BY record_count DESC;
