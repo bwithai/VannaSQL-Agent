@@ -1,0 +1,11 @@
+# python
+python_env/
+
+# vanna
+RAG-Layer/
+
+# vscode
+.vscode/
+
+# pycache
+__pycache__/
