@@ -20,6 +20,7 @@ This project implements Vanna.AI to enable natural language querying of your MyS
 
 2. **MySQL database** accessible with connection details
 3. **Python 3.12+**
+4. **Microsoft Visual Studio Build Tools**
 
 ## Setup
 

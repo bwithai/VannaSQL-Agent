@@ -4,6 +4,7 @@ Enhanced Vanna configuration for Phi4-reasoning model
 Leverages chain-of-thought capabilities for better SQL generation
 """
 
+import os
 from vanna.ollama import Ollama
 from vanna.chromadb import ChromaDB_VectorStore
 
@@ -50,40 +51,86 @@ Please think through this step-by-step before generating the SQL query.
         
         return super().generate_sql(enhanced_question, **reasoning_config)
 
-    def ask(self, question: str, **kwargs):
-        """Override ask method to enable reasoning mode"""
-        # Enable thinking mode if available in Ollama
-        if hasattr(self, 'client') and hasattr(self.client, 'chat'):
-            kwargs['think'] = True  # Enable Ollama thinking mode
-        
-        return super().ask(question, **kwargs)
-
 def main():
+    """Interactive reasoning-enhanced Vanna session"""
+    # RAG-Layer directory path
+    rag_layer_dir = "RAG-Layer"
+    
+    # Check if RAG-Layer directory exists
+    if not os.path.exists(rag_layer_dir):
+        print(f"❌ RAG-Layer directory not found: {os.path.abspath(rag_layer_dir)}")
+        print("   Run 'python hello.py' to train your model first.")
+        return
+    
     # Initialize reasoning-enhanced Vanna
     vn = ReasoningVanna(config={
         'model': 'phi4-mini:latest',
+        'path': rag_layer_dir,  # Use RAG-Layer directory
+        # Reasoning-optimized Ollama settings
         'base_url': 'http://localhost:11434'  # Ollama default
     })
     
-    # Connect to database
-    vn.connect_to_mysql(
-        host='localhost', 
-        dbname='cfms', 
-        user='newuser', 
-        password='newpassword', 
-        port=3306
-    )
-    
-    print("🧠 Reasoning-Enhanced Vanna initialized with Phi4")
-    print("Ask complex questions to see step-by-step reasoning!\n")
-    
-    # Example usage
     try:
-        result = vn.ask("Get all active users with their complete organizational hierarchy, showing the reasoning process")
-        print("🤖 Reasoning SQL Generation:")
-        print(result)
+        # Connect to database
+        vn.connect_to_mysql(host='localhost', dbname='cfms', user='newuser', password='newpassword', port=3306)
+        print("✅ Connected to MySQL database")
+        
+        # Check training data
+        training_data = vn.get_training_data()
+        if training_data.empty:
+            print("❌ No training data found. Please run hello.py first to train the model.")
+            return
+        
+        print(f"📊 Found {len(training_data)} training items in RAG-Layer")
+        print(f"📁 Using RAG-Layer directory: {os.path.abspath(rag_layer_dir)}")
+        print("\n🧠 Reasoning-Enhanced Vanna SQL Agent is ready!")
+        print("This version uses chain-of-thought reasoning for better SQL generation.")
+        print("Ask me questions about your database in natural language.")
+        print("Type 'quit' to exit, 'help' for examples.\n")
+        
+        while True:
+            try:
+                question = input("❓ Your question: ").strip()
+                
+                if question.lower() in ['quit', 'exit', 'q']:
+                    print("👋 Goodbye!")
+                    break
+                    
+                if question.lower() == 'help':
+                    print_help()
+                    continue
+                    
+                if not question:
+                    continue
+                
+                print(f"\n🤔 Reasoning about: {question}")
+                
+                # Generate and execute SQL with reasoning
+                result = vn.ask(question)
+                if result is not None:
+                    print(f"✅ Result:\n{result}\n")
+                else:
+                    print("❌ Query failed to execute\n")
+                
+            except KeyboardInterrupt:
+                print("\n👋 Goodbye!")
+                break
+            except Exception as e:
+                print(f"❌ Error: {e}\n")
+                
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"❌ Database connection failed: {e}")
+
+def print_help():
+    print("\n📖 Example questions for reasoning-enhanced mode:")
+    print("- 'Show me the complete organizational hierarchy with active users'")
+    print("- 'Find all users and their financial data summary'")
+    print("- 'What are the top 5 formations by expense amount?'")
+    print("- 'Show me asset allocation across different corps'")
+    print("- 'Find all users who have made transfers this month'")
+    print("- 'Display liability trends by formation type'")
+    print("\n💡 The reasoning mode will show step-by-step thinking before generating SQL.")
+    print()
 
 if __name__ == "__main__":
     main() 

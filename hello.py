@@ -1,12 +1,25 @@
 from vanna.ollama import Ollama
 from vanna.chromadb import ChromaDB_VectorStore
+import os
 
 class MyVanna(ChromaDB_VectorStore, Ollama):
     def __init__(self, config=None):
         ChromaDB_VectorStore.__init__(self, config=config)
         Ollama.__init__(self, config=config)
 
-vn = MyVanna(config={'model': 'phi4-mini:latest'})
+# Create RAG-Layer directory if it doesn't exist
+rag_layer_dir = "RAG-Layer"
+if not os.path.exists(rag_layer_dir):
+    os.makedirs(rag_layer_dir)
+    print(f"📁 Created directory: {rag_layer_dir}")
+
+# Initialize Vanna with RAG-Layer path for ChromaDB storage
+vn = MyVanna(config={
+    'model': 'phi4-mini:latest',
+    'path': rag_layer_dir  # Store ChromaDB data in RAG-Layer directory
+})
+
+print(f"📊 Using RAG-Layer directory: {os.path.abspath(rag_layer_dir)}")
 
 try:
     vn.connect_to_mysql(host='localhost', dbname='cfms', user='newuser', password='newpassword', port=3306)
@@ -32,7 +45,7 @@ print("📚 Adding CFMS-specific training data...")
 vn.train(documentation="""
 CFMS (Command Fund Management System) is a financial management system designed to manage command funds within a military formation. Below is an overview of the database structure:
 
-- **users**: Stores user details. The `is_active` column indicates whether a user is active (1) or inactive (0). The `role` column contains the user’s role as a string. Each user represents a military formation.
+- **users**: Stores user details. The `is_active` column indicates whether a user is active (1) or inactive (0). The `role` column contains the user's role as a string. Each user represents a military formation.
 - **command_funds**: Records incoming funds received by the formation (inflows).
 - **activity_log**: Logs all system activities performed by users.
 - **apartments**: Stores appointment details related to formations.
@@ -248,4 +261,5 @@ vn.train(sql="SELECT * FROM units")
 vn.train(sql="SELECT * FROM users WHERE is_active = 1")
 
 print("✅ CFMS training complete!")
-print("🚀 The model now understands your CFMS database structure better.")
+print(f"🚀 The model now understands your CFMS database structure better.")
+print(f"📁 All training data stored in: {os.path.abspath(rag_layer_dir)}")

@@ -4,6 +4,7 @@ Example usage script for the trained Vanna model.
 Run this after training your model with hello.py
 """
 
+import os
 from vanna.ollama import Ollama
 from vanna.chromadb import ChromaDB_VectorStore
 
@@ -13,8 +14,20 @@ class MyVanna(ChromaDB_VectorStore, Ollama):
         Ollama.__init__(self, config=config)
 
 def main():
-    # Initialize with the same config as training
-    vn = MyVanna(config={'model': 'phi4-mini:latest'})  # Use same model as in hello.py
+    # RAG-Layer directory path
+    rag_layer_dir = "RAG-Layer"
+    
+    # Check if RAG-Layer directory exists
+    if not os.path.exists(rag_layer_dir):
+        print(f"❌ RAG-Layer directory not found: {os.path.abspath(rag_layer_dir)}")
+        print("   Run 'python hello.py' to train your model first.")
+        return
+    
+    # Initialize with the same config as training (using RAG-Layer directory)
+    vn = MyVanna(config={
+        'model': 'phi4-mini:latest',  # Use same model as in hello.py
+        'path': rag_layer_dir  # Use RAG-Layer directory
+    })
     
     try:
         # Connect to the same database
@@ -27,7 +40,8 @@ def main():
             print("❌ No training data found. Please run hello.py first to train the model.")
             return
         
-        print(f"📊 Found {len(training_data)} training items")
+        print(f"📊 Found {len(training_data)} training items in RAG-Layer")
+        print(f"📁 Using RAG-Layer directory: {os.path.abspath(rag_layer_dir)}")
         print("\n🤖 Vanna SQL Agent is ready!")
         print("Ask me questions about your database in natural language.")
         print("Type 'quit' to exit, 'help' for examples.\n")

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Web interface for the Vanna SQL Agent using the built-in Flask app.
+Web interface for VannaSQL-Agent using Flask.
 Run this after training your model with hello.py
 """
 
+import os
 from vanna.ollama import Ollama
 from vanna.chromadb import ChromaDB_VectorStore
 from vanna.flask import VannaFlaskApp
@@ -14,15 +15,25 @@ class MyVanna(ChromaDB_VectorStore, Ollama):
         Ollama.__init__(self, config=config)
 
 def main():
-    print("🚀 Starting Vanna SQL Agent Web Interface...")
+    # RAG-Layer directory path
+    rag_layer_dir = "RAG-Layer"
     
-    # Initialize with the same config as training
-    vn = MyVanna(config={'model': 'phi4-mini:latest'})  # Use same model as in hello.py
+    # Check if RAG-Layer directory exists
+    if not os.path.exists(rag_layer_dir):
+        print(f"❌ RAG-Layer directory not found: {os.path.abspath(rag_layer_dir)}")
+        print("   Run 'python hello.py' to train your model first.")
+        return
     
+    # Initialize Vanna with RAG-Layer directory
+    vn = MyVanna(config={
+        'model': 'phi4-mini:latest',
+        'path': rag_layer_dir  # Use RAG-Layer directory
+    })
+
     try:
-        # Connect to the same database
+        # Connect to MySQL database
         vn.connect_to_mysql(host='localhost', dbname='cfms', user='newuser', password='newpassword', port=3306)
-        print("✅ Connected to database")
+        print("✅ Connected to MySQL database")
         
         # Check if we have training data
         training_data = vn.get_training_data()
@@ -30,13 +41,16 @@ def main():
             print("❌ No training data found. Please run hello.py first to train the model.")
             return
         
-        print(f"📊 Found {len(training_data)} training items")
-        print("🌐 Starting web interface...")
-        print("📱 Open your browser and go to: http://localhost:5000")
-        print("⏹️  Press Ctrl+C to stop the server")
+        print(f"📊 Found {len(training_data)} training items in RAG-Layer")
+        print(f"📁 Using RAG-Layer directory: {os.path.abspath(rag_layer_dir)}")
         
-        # Create and run the Flask app
+        # Create Flask app
         app = VannaFlaskApp(vn)
+        
+        print("🌐 Starting VannaSQL-Agent Web Interface...")
+        print("📱 Open your browser and go to: http://localhost:5000")
+        
+        # Run the Flask app
         app.run(host='0.0.0.0', port=5000, debug=False)
         
     except Exception as e:
