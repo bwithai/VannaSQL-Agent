@@ -30,7 +30,7 @@ This project implements Vanna.AI to enable natural language querying of your MyS
    ```bash
    pip install -e .
    # or with uv:
-   uv pip install -e .
+   uv sync
    ```
 
 ### Offline Installation
