@@ -5,103 +5,24 @@ Run this after training your model with hello.py
 """
 
 import os
-import warnings
-import sys
-import contextlib
-import time
-
-# Set ChromaDB environment variables at the very beginning
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
-os.environ["CHROMA_TELEMETRY"] = "False"
-os.environ["CHROMA_CLIENT_AUTH_PROVIDER"] = ""
-os.environ["CHROMA_SERVER_AUTH_PROVIDER"] = ""
-os.environ["CHROMA_SERVER_AUTHN_PROVIDER"] = ""
-os.environ["CHROMA_CLIENT_AUTHN_PROVIDER"] = ""
-
-# Suppress all warnings
-warnings.filterwarnings("ignore")
-
-# More aggressive stderr suppression
-@contextlib.contextmanager
-def suppress_stdout_stderr():
-    with open(os.devnull, "w") as devnull:
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
-        sys.stdout = devnull
-        sys.stderr = devnull
-        try:
-            yield
-        finally:
-            sys.stdout = old_stdout
-            sys.stderr = old_stderr
-
-# Import ChromaDB first with complete suppression
-with suppress_stdout_stderr():
-    try:
-        import chromadb
-        from chromadb.config import Settings
-        # Pre-configure ChromaDB settings
-        chromadb.configure(anonymized_telemetry=False)
-    except:
-        pass
-
-# Now import Vanna modules with suppression
-with suppress_stdout_stderr():
-    from vanna.ollama import Ollama
-    from vanna.chromadb import ChromaDB_VectorStore
+from vanna.ollama import Ollama
+from vanna.chromadb import ChromaDB_VectorStore
 
 class MyVanna(ChromaDB_VectorStore, Ollama):
     def __init__(self, config=None):
-        # Ensure telemetry is disabled in config
-        if config is None:
-            config = {}
-        config['anonymized_telemetry'] = False
-        
-        with suppress_stdout_stderr():
-            ChromaDB_VectorStore.__init__(self, config=config)
-            Ollama.__init__(self, config=config)
+        ChromaDB_VectorStore.__init__(self, config=config)
+        Ollama.__init__(self, config=config)
 
-    def ask_with_timeout(self, question: str, timeout_seconds: int = 30):
-        """Enhanced ask method with timeout and step-by-step processing"""
-        print(f"🔍 Step 1: Generating SQL for: '{question}'")
-        
-        try:
-            # Step 1: Generate SQL with timeout
-            start_time = time.time()
-            sql = self.generate_sql(question)
-            generation_time = time.time() - start_time
-            
-            if generation_time > timeout_seconds:
-                print(f"⏰ SQL generation timed out after {generation_time:.1f}s")
-                return None
-                
-            print(f"✅ SQL Generated in {generation_time:.1f}s:")
-            print(f"📝 SQL: {sql}")
-            
-            # Step 2: Validate SQL
-            if not sql or sql.strip() == "":
-                print("❌ Empty SQL generated")
-                return None
-                
-            # Step 3: Execute SQL
-            print("🔍 Step 2: Executing SQL query...")
-            start_time = time.time()
-            
-            result_df = self.run_sql(sql)
-            execution_time = time.time() - start_time
-            
-            print(f"✅ Query executed in {execution_time:.1f}s")
-            
-            if result_df is None or result_df.empty:
-                print("⚠️  Query returned no results")
-                return None
-                
-            print(f"📊 Results: {len(result_df)} rows returned")
-            return result_df
-            
-        except Exception as e:
-            print(f"❌ Error during processing: {e}")
-            return None
+def get_user_confirmation(prompt):
+    """Get user confirmation (y/n)"""
+    while True:
+        response = input(f"{prompt} (y/n): ").strip().lower()
+        if response in ['y', 'yes']:
+            return True
+        elif response in ['n', 'no']:
+            return False
+        else:
+            print("Please enter 'y' for yes or 'n' for no.")
 
 def main():
     # RAG-Layer directory path
@@ -113,16 +34,12 @@ def main():
         print("   Run 'python hello.py' to train your model first.")
         return
     
-    # Initialize with the same config as training (using RAG-Layer directory)
+    # Initialize with the same config as training
     print("🔌 Initializing VannaSQL-Agent...")
     vn = MyVanna(config={
-        'model': 'phi4-mini:latest',  # Use same model as in hello.py
-        'path': rag_layer_dir,  # Use RAG-Layer directory
-        'anonymized_telemetry': False,  # Explicitly disable telemetry
-        # Ollama optimization settings
-        'num_predict': 2048,  # Limit response length
-        'temperature': 0.1,   # More deterministic responses
-        'top_p': 0.9,        # Focus on most likely tokens
+        'model': 'phi4-mini:latest',
+        'path': rag_layer_dir,
+        "keep_alive": "5m"
     })
     
     try:
@@ -138,10 +55,10 @@ def main():
         
         print(f"📊 Found {len(training_data)} training items in RAG-Layer")
         print(f"📁 Using RAG-Layer directory: {os.path.abspath(rag_layer_dir)}")
-        print("\n🤖 Enhanced Vanna SQL Agent is ready!")
-        print("This version uses step-by-step processing with timeout handling.")
+        print("\n🤖 Vanna SQL Agent is ready!")
         print("Ask me questions about your database in natural language.")
-        print("Type 'quit' to exit, 'help' for examples, 'debug' for training data info.\n")
+        print("You'll see each step of the process: SQL generation → execution → visualization")
+        print("Type 'quit' to exit, 'help' for examples.\n")
         
         while True:
             try:
@@ -155,28 +72,101 @@ def main():
                     print_help()
                     continue
                     
-                if question.lower() == 'debug':
-                    show_debug_info(vn)
-                    continue
-                    
                 if not question:
                     continue
                 
                 print(f"\n🚀 Processing: {question}")
-                print("=" * 50)
+                print("=" * 60)
                 
-                # Use enhanced ask method with timeout
-                result = vn.ask_with_timeout(question, timeout_seconds=45)
+                # Step 1: Generate SQL
+                print("🔍 Step 1: Generating SQL from your question...")
+                try:
+                    sql = vn.generate_sql(question)
+                    if not sql or sql.strip() == "":
+                        print("❌ Failed to generate SQL")
+                        continue
+                    
+                    print("✅ SQL Generated:")
+                    print("📝 Generated SQL Query:")
+                    print("-" * 40)
+                    print(sql)
+                    print("-" * 40)
+                    
+                except Exception as e:
+                    print(f"❌ Error generating SQL: {e}")
+                    continue
                 
-                if result is not None:
+                # Step 2: Ask user if they want to run the SQL
+                if not get_user_confirmation("🚀 Do you want to execute this SQL query?"):
+                    print("⏭️ Skipping query execution.\n")
+                    continue
+                
+                # Step 3: Run SQL
+                print("\n🔍 Step 2: Executing SQL query...")
+                try:
+                    result_df = vn.run_sql(sql)
+                    if result_df is None or result_df.empty:
+                        print("⚠️ Query returned no results")
+                        continue
+                    
+                    print("✅ Query executed successfully!")
+                    print(f"📊 Results: {len(result_df)} rows returned")
                     print("\n📋 Query Results:")
-                    print(result.to_string(max_rows=10, max_cols=8))
-                    if len(result) > 10:
-                        print(f"... (showing first 10 of {len(result)} rows)")
-                else:
-                    print("\n❌ No results returned")
+                    print(result_df.to_string(max_rows=10, max_cols=8))
+                    if len(result_df) > 10:
+                        print(f"... (showing first 10 of {len(result_df)} rows)")
+                    
+                except Exception as e:
+                    print(f"❌ Error executing SQL: {e}")
+                    continue
                 
-                print("=" * 50 + "\n")
+                # Step 4: Ask if user wants to generate a plot
+                if not get_user_confirmation("\n📊 Do you want to generate a visualization for this data?"):
+                    print("⏭️ Skipping visualization.\n")
+                    print("=" * 60 + "\n")
+                    continue
+                
+                # Step 5: Generate Plotly code
+                print("\n🔍 Step 3: Generating visualization code...")
+                try:
+                    plotly_code = vn.generate_plotly_code(question=question, sql=sql, df=result_df)
+                    if not plotly_code or plotly_code.strip() == "":
+                        print("❌ Failed to generate visualization code")
+                        print("=" * 60 + "\n")
+                        continue
+                    
+                    print("✅ Plotly Code Generated:")
+                    print("📝 Generated Plotly Code:")
+                    print("-" * 40)
+                    print(plotly_code)
+                    print("-" * 40)
+                    
+                except Exception as e:
+                    print(f"❌ Error generating plotly code: {e}")
+                    print("=" * 60 + "\n")
+                    continue
+                
+                # Step 6: Ask if user wants to create the plot
+                if not get_user_confirmation("🎨 Do you want to create and display the plot?"):
+                    print("⏭️ Skipping plot creation.\n")
+                    print("=" * 60 + "\n")
+                    continue
+                
+                # Step 7: Generate the actual plot
+                print("\n🔍 Step 4: Creating visualization...")
+                try:
+                    fig = vn.get_plotly_figure(plotly_code=plotly_code, df=result_df)
+                    if fig:
+                        print("✅ Visualization created successfully!")
+                        print("📊 Plot has been generated. In a Jupyter notebook, it would display automatically.")
+                        print("💡 You can save the plot using fig.write_html('plot.html') or fig.show()")
+                    else:
+                        print("❌ Failed to create visualization")
+                        
+                except Exception as e:
+                    print(f"❌ Error creating plot: {e}")
+                
+                print("=" * 60 + "\n")
                 
             except KeyboardInterrupt:
                 print("\n👋 Goodbye!")
@@ -186,37 +176,6 @@ def main():
                 
     except Exception as e:
         print(f"❌ Database connection failed: {e}")
-        if "'cryptography' package is required" in str(e):
-            print("💡 Fix: Install the missing package with:")
-            print("   pip install cryptography")
-
-def show_debug_info(vn):
-    """Show debug information about training data"""
-    print("\n🔍 Debug Information:")
-    print("=" * 30)
-    
-    try:
-        training_data = vn.get_training_data()
-        
-        if not training_data.empty:
-            type_counts = training_data['training_data_type'].value_counts()
-            print("📊 Training Data Breakdown:")
-            for data_type, count in type_counts.items():
-                icon = {"sql": "🔍", "ddl": "🏗️", "documentation": "📚"}.get(data_type, "📄")
-                print(f"   {icon} {data_type.upper()}: {count} items")
-            
-            print(f"\n📝 Recent SQL Training Examples:")
-            sql_data = training_data[training_data['training_data_type'] == 'sql'].head(3)
-            for idx, row in sql_data.iterrows():
-                content = row.get('content', '')[:100] + "..." if len(row.get('content', '')) > 100 else row.get('content', '')
-                print(f"   • {content}")
-        else:
-            print("❌ No training data found")
-            
-    except Exception as e:
-        print(f"❌ Error getting debug info: {e}")
-    
-    print("=" * 30 + "\n")
 
 def print_help():
     print("\n📖 Example questions you can ask:")
@@ -226,11 +185,19 @@ def print_help():
     print("- 'Show the organizational structure'")
     print("- 'Get user count by role'")
     print("- 'Find all superusers'")
+    print("- 'Show me expense trends over time'")
+    print("- 'What is the total budget allocation by formation?'")
+    print("\n💡 Process Flow:")
+    print("1. 🔍 SQL Generation - AI converts your question to SQL")
+    print("2. 🚀 Query Execution - Run the SQL on your database") 
+    print("3. 📊 Visualization Code - Generate Plotly code for charts")
+    print("4. 🎨 Plot Creation - Create the actual visualization")
     print("\n💡 Tips for better results:")
     print("- Be specific about what you want")
     print("- Use 'active users' for users where is_active = 1")
     print("- Mention 'hierarchy' for organizational structure")
     print("- Ask for 'count' or 'number' for aggregate queries")
+    print("- Questions about trends work well for visualizations")
     print()
 
 if __name__ == "__main__":

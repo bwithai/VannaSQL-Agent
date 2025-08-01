@@ -1,9 +1,11 @@
-# python
-python_env/
+# Python
 __pycache__/
 **/__pycache__/
 *.py[cod]
 *$py.class
+*.pyc
+*.pyo
+*.pyd
 *.so
 .Python
 build/
@@ -31,18 +33,8 @@ htmlcov/
 *.py,cover
 .hypothesis/
 
-# vanna
-RAG-Layer/
-
-# vscode
-.vscode/
-
-# Additional Python ignores
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
+# Virtual environments
+python_env/
 .env
 .venv
 env/
@@ -50,6 +42,17 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Project specific
+RAG-Layer/
+dep_pkg/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # OS generated files
 .DS_Store
@@ -59,12 +62,6 @@ venv.bak/
 .Trashes
 ehthumbs.db
 Thumbs.db
-
-# IDE files
-.idea/
-*.swp
-*.swo
-*~
 
 # Log files
 *.log
