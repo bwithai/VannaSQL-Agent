@@ -24,12 +24,26 @@ This project implements Vanna.AI to enable natural language querying of your MyS
 
 ## Setup
 
+### Online Installation
+
 1. **Install dependencies:**
    ```bash
    pip install -e .
    # or with uv:
    uv pip install -e .
    ```
+
+### Offline Installation
+
+For offline environments without internet access, see our comprehensive guide:
+
+📖 **[Offline Package Setup Guide](OFFLINE_PACKAGE_SETUP_GUIDE.md)**
+
+This guide covers:
+- Downloading all dependencies as wheel files
+- Resolving dependency conflicts
+- Converting source packages to wheels
+- Step-by-step offline installation process
 
 2. **Configure database connection:**
    Edit the connection details in the scripts:
@@ -177,11 +191,15 @@ vn.remove_training_data(id='1-ddl')
 
 ```
 VannaSQL-Agent/
-├── hello.py              # Training script (run first)
-├── example_usage.py      # Interactive CLI interface
-├── web_interface.py      # Web UI interface
-├── pyproject.toml        # Dependencies
-└── README.md            # This file
+├── hello.py                        # Training script (run first)
+├── example_usage.py                # Interactive CLI interface
+├── web_interface.py                # Web UI interface
+├── pyproject.toml                  # Dependencies
+├── Config.md                       # Package download configuration
+├── OFFLINE_PACKAGE_SETUP_GUIDE.md  # Comprehensive offline installation guide
+├── dep_pkg/                        # Local packages directory (after setup)
+│   └── *.whl                       # Downloaded wheel files
+└── README.md                       # This file
 ```
 
 ## Troubleshooting
