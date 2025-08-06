@@ -12,7 +12,7 @@ When setting up Python packages for offline use, you might encounter these issue
 
 ## Solution Approach
 
-We'll download all dependencies as wheel files and resolve conflicts step by step.
+We'll download all dependencies as wheel files and resolve conflicts step by step using a simplified approach.
 
 ## Step-by-Step Commands
 
@@ -29,66 +29,42 @@ pip download -d dep_pkg --only-binary=:all: setuptools wheel
 ```
 **Why this step?** Some packages require these tools even for wheel installation.
 
-### 3. Download Core Packages
+### 3. Download Security Dependencies
+```bash
+# Download cryptography package (often has specific requirements)
+pip download -d dep_pkg --only-binary=:all: cryptography>=45.0.5
+```
+
+### 4. Download Core Vanna Package
 ```bash
 # Download the main package without optional dependencies first
 pip download -d dep_pkg --only-binary=:all: vanna>=0.7.9
 ```
 **Why separately?** This avoids complex dependency resolution conflicts.
 
-### 4. Download Security Dependencies
-```bash
-# Download cryptography package (often has specific requirements)
-pip download -d dep_pkg --only-binary=:all: cryptography>=45.0.5
-```
-
-### 5. Handle Package with Version Conflicts
-```bash
-# Download specific compatible versions to avoid conflicts
-pip download -d dep_pkg --only-binary=:all: "chroma-hnswlib==0.7.5" "numpy>=1.22.5,<2.0.0"
-```
-**What happened?** ChromaDB needed chroma-hnswlib==0.7.6, but only 0.7.5 was available as wheel.
-
-### 6. Fix the Version Conflict
-```bash
-# Download the exact version needed (might be source format)
-pip download -d dep_pkg chroma-hnswlib==0.7.6 --prefer-binary
-
-# Convert source package to wheel format
-pip wheel -w dep_pkg --find-links dep_pkg chroma-hnswlib==0.7.6
-
-# Clean up the source file
-Remove-Item dep_pkg\chroma_hnswlib-0.7.6.tar.gz  # Windows PowerShell
-# rm dep_pkg/chroma_hnswlib-0.7.6.tar.gz         # Linux/Mac
-```
-**Why convert?** Wheel files install faster and don't need compilation.
-
-### 7. Download Missing Package
-```bash
-# Download package that wasn't included in initial download
-pip download -d dep_pkg --only-binary=:all: flasgger
-```
-
-### 8. Handle Another Source Package
-```bash
-# Convert PyPika from source to wheel format
-pip wheel -w dep_pkg --find-links dep_pkg --no-deps PyPika==0.48.9
-
-# Remove the source version
-Remove-Item dep_pkg\PyPika-0.48.9.tar.gz  # Windows PowerShell
-# rm dep_pkg/PyPika-0.48.9.tar.gz         # Linux/Mac
-```
-
-### 9. Download Remaining Optional Dependencies
+### 5. Download Database-Specific Dependencies
 ```bash
 # Download database-specific packages
 pip download -d dep_pkg --only-binary=:all: PyMySQL ollama psycopg2-binary db-dtypes
 ```
 
-### 10. Download Main Package with All Dependencies
+### 6. Download ChromaDB (Latest Version)
 ```bash
-# Now download the complete package (this should work with resolved conflicts)
-pip download -d dep_pkg --only-binary=:all: "vanna[chromadb,mysql,ollama,postgres]>=0.7.9"
+# Download ChromaDB separately to avoid version conflicts
+pip download -d dep_pkg --prefer-binary chromadb
+```
+**Note:** This downloads the latest stable version (1.0.x) which works better than older versions.
+
+### 7. Convert Any Source Packages to Wheels
+```bash
+# Check if PyPika was downloaded as source and convert it
+pip wheel -w dep_pkg --find-links dep_pkg --no-deps PyPika==0.48.9
+
+# Remove any .tar.gz files (keep only .whl files)
+# Windows PowerShell:
+Get-ChildItem dep_pkg\*.tar.gz | Remove-Item
+# Linux/Mac:
+# rm dep_pkg/*.tar.gz
 ```
 
 ## Verification Commands
@@ -96,9 +72,10 @@ pip download -d dep_pkg --only-binary=:all: "vanna[chromadb,mysql,ollama,postgre
 ### Test Offline Installation
 ```bash
 # Test if all dependencies can be resolved (dry run - doesn't actually install)
-pip install --find-links dep_pkg --no-index --dry-run "vanna[chromadb,mysql,ollama,postgres]>=0.7.9"
+# Note: This may take time due to dependency resolution, but should eventually succeed
+pip install --find-links dep_pkg --no-index --dry-run vanna cryptography chromadb PyMySQL ollama psycopg2-binary db-dtypes
 ```
-**What to expect:** Long list of packages that "Would install" - this means success!
+**What to expect:** List of packages that "Would install" - this means success!
 
 ### Check Package Directory
 ```bash
@@ -106,35 +83,41 @@ pip install --find-links dep_pkg --no-index --dry-run "vanna[chromadb,mysql,olla
 ls dep_pkg/          # Linux/Mac
 dir dep_pkg\         # Windows
 
-# Count packages
-ls dep_pkg/ | wc -l  # Linux/Mac - should show 100+ files
+# Count packages (should show 100+ files)
+ls dep_pkg/ | wc -l                    # Linux/Mac
+(Get-ChildItem dep_pkg\).Count         # Windows PowerShell
 ```
 
 ## Offline Installation (On Target Machine)
 
-### Method 1: Install Everything at Once
+### Method 1: Install Core Components First (Recommended)
 ```bash
-pip install --find-links dep_pkg --no-index "vanna[chromadb,mysql,ollama,postgres]>=0.7.9"
-```
+# Install build tools first
+pip install --find-links dep_pkg --no-index setuptools wheel
 
-### Method 2: Step-by-Step Installation (Safer)
-```bash
-# Install core dependencies first
-pip install --find-links dep_pkg --no-index cryptography>=45.0.5
-
-# Install chromadb with specific version
-pip install --find-links dep_pkg --no-index "chromadb>=0.6.3,<0.7.0"
+# Install core dependencies
+pip install --find-links dep_pkg --no-index cryptography
 
 # Install main package
-pip install --find-links dep_pkg --no-index vanna>=0.7.9
+pip install --find-links dep_pkg --no-index vanna
 
-# Install optional dependencies
+# Install ChromaDB
+pip install --find-links dep_pkg --no-index chromadb
+
+# Install database-specific dependencies
 pip install --find-links dep_pkg --no-index PyMySQL ollama psycopg2-binary db-dtypes
+```
+
+### Method 2: Install Everything at Once (Alternative)
+```bash
+# Try to install all at once (may have dependency resolution issues)
+pip install --find-links dep_pkg --no-index vanna cryptography chromadb PyMySQL ollama psycopg2-binary db-dtypes
 ```
 
 ### Verify Installation Works
 ```bash
 python -c "import vanna; print('Vanna installed successfully')"
+python -c "import chromadb; print('ChromaDB installed successfully')"
 ```
 
 ## Key Command Explanations
@@ -161,31 +144,45 @@ Only processes the specified package, ignoring its dependencies.
 
 ### If you get "No matching distribution found":
 - The package might not have a wheel version available
-- Try downloading without `--only-binary=:all:`
-- Use `pip wheel` to convert the source package
+- Remove `--only-binary=:all:` flag and use `--prefer-binary` instead
+- Use `pip wheel` to convert any source package to wheel format
 
 ### If you get dependency conflicts:
-- Download packages individually rather than all at once
-- Use specific version ranges to force compatibility
-- Check which exact versions are conflicting in the error message
+- Download packages individually rather than all at once (as shown in our step-by-step approach)
+- Use the latest ChromaDB version (1.0.x) instead of trying to force older versions
+- Install packages one by one on the target machine instead of all at once
 
 ### If installation fails on offline machine:
-- Ensure all `.tar.gz` files are converted to `.whl`
+- Ensure all `.tar.gz` files are converted to `.whl` (use the cleanup command)
 - Check that build dependencies (setuptools, wheel) are included
+- Use the step-by-step installation method instead of installing everything at once
 - Use `--dry-run` first to test before actual installation
+
+### Common Issues and Solutions:
+- **ChromaDB version conflicts**: Use the latest version (1.0.x) which is more stable
+- **PyPika source package**: Convert to wheel using `pip wheel` command
+- **Long dependency resolution**: Be patient, modern pip can take time to resolve complex dependencies
 
 ## Files Structure
 After completion, your `dep_pkg` directory should contain:
 ```
 dep_pkg/
 ├── vanna-0.7.9-py3-none-any.whl
-├── chromadb-0.6.3-py3-none-any.whl
-├── chroma_hnswlib-0.7.6-cp312-cp312-win_amd64.whl
+├── chromadb-1.0.15-cp39-abi3-win_amd64.whl
 ├── pypika-0.48.9-py2.py3-none-any.whl
+├── cryptography-45.0.6-cp311-abi3-win_amd64.whl
+├── pymysql-1.1.1-py3-none-any.whl
+├── ollama-0.5.2-py3-none-any.whl
+├── psycopg2_binary-2.9.10-cp312-cp312-win_amd64.whl
+├── db_dtypes-1.4.3-py3-none-any.whl
 ├── ... (100+ other wheel files)
 └── (no .tar.gz files remaining)
 ```
 
 ## Summary
 
-This process ensures all Python packages are downloaded as wheel files for reliable offline installation, with all dependency conflicts resolved and build tools included.
+This simplified process downloads all Python packages as wheel files for reliable offline installation. The key improvements:
+- Uses latest ChromaDB version (1.0.x) to avoid legacy conflicts
+- Downloads packages in logical groups to avoid complex dependency resolution
+- Converts any source packages to wheels for better compatibility
+- Provides step-by-step installation method for reliable offline deployment

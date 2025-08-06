@@ -15,7 +15,7 @@ if not os.path.exists(rag_layer_dir):
 
 # Initialize Vanna with RAG-Layer path for ChromaDB storage
 vn = MyVanna(config={
-    'model': 'pxlksr/defog_sqlcoder-7b-2:Q2_KS',
+    'model': 'phi4-mini:latest',
     'path': rag_layer_dir  # Store ChromaDB data in RAG-Layer directory
 })
 
