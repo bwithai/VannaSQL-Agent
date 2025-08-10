@@ -1,73 +1,73 @@
-version: '3.8'
-
 services:
-  # MySQL
-  mysql:
-    image: mysql:8.0
-    container_name: vannasql-mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: cfms
-      MYSQL_USER: newuser
-      MYSQL_PASSWORD: newpassword
-    ports:
-      - "3307:3306"  # Different port to avoid conflict with host MySQL
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./sql_init:/docker-entrypoint-initdb.d  # For initialization scripts
-    restart: unless-stopped
-    profiles:
-      - database  # Use profile to make this optional
-
-
-  # VannaSQL Agent
-  vannasql-agent:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: vannasql-agent-dev
-    ports:
-      - "8000:8000"  # FastAPI/Uvicorn
-      - "8080:8080"  # Alternative web port
-      - "5000:5000"  # Flask web interface
-    volumes:
-      # Mount source code for development
-      - .:/app
-      # Mount RAG-Layer for persistent ChromaDB storage
-      - ./RAG-Layer:/app/RAG-Layer
-      # Exclude dep_pkg from mounting (using Docker's own dependencies)
-      - /app/dep_pkg
-      - ./chroma:/root/.cache/chroma
-    environment:
-      - PYTHONPATH=/app
-      - ENVIRONMENT=development
-      # Database connection settings
-      - DB_HOST=host.docker.internal  # For connecting to host MySQL
-      - DB_PORT=3306
-      - DB_NAME=cfms
-      - DB_USER=newuser
-      - DB_PASSWORD=newpassword
-      # Ollama settings (connecting to host Ollama)
-      - OLLAMA_HOST=http://host.docker.internal:11434
-      - OLLAMA_MODEL=phi4-mini:latest
-    # Allow container to access host services (MySQL, Ollama)
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    # Keep container running for development
-    stdin_open: true
-    tty: true
-    # Restart policy
-    restart: unless-stopped
-    # Health check
+  db:
+    image: mysql:8
+    restart: always
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000', timeout=5)"]
-      interval: 30s
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      retries: 5
+      start_period: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+    volumes:
+      - app-db-data:/var/lib/mysql
+    env_file:
+      - .env
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD?Variable not set}
+      - MYSQL_DATABASE=${MYSQL_DB?Variable not set}
+      - MYSQL_USER=${MYSQL_USER?Variable not set}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD?Variable not set}
 
+  adminer:
+    image: adminer
+    restart: always
+    networks:
+      - traefik-public
+      - default
+    depends_on:
+      - db
+    environment:
+      - ADMINER_DESIGN=pepa-linha-dark
 
+  backend:
+    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    restart: always
+    networks:
+      - traefik-public
+      - default
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DOMAIN=${DOMAIN}
+      - FRONTEND_HOST=${FRONTEND_HOST?Variable not set}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS}
+      - SECRET_KEY=${SECRET_KEY?Variable not set}
+      - FIRST_SUPERUSER=${FIRST_SUPERUSER?Variable not set}
+      - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD?Variable not set}
+      - MYSQL_SERVER=db
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_DATABASE=${MYSQL_DB}
+      - MYSQL_USER=${MYSQL_USER?Variable not set}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD?Variable not set}
+      - OLLAMA_HOST=${OLLAMA_HOST?Variable not set}
+      - OLLAMA_MODEL=${OLLAMA_MODEL?Variable not set}
+    volumes:
+      - ./backend/app:/app/app  # Only mount the app directory
+      - ./app/RAG-Layer:/app/app/RAG-Layer  # Mount RAG-Layer for persistent ChromaDB storage
+      - ./dependencies/docker_pkg:/app/docker_pkg # Install Dependencies from here intead of PYPI
+      - ./chroma:/root/.cache/chroma
+    build:
+      context: ./backend
 
 volumes:
-  mysql_data:
-    driver: local
+  app-db-data:
+
+networks:
+  traefik-public:
+    # docker network create traefik-public
+    # Allow setting it to false for testing
+    external: true

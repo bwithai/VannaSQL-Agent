@@ -32,8 +32,8 @@ def main():
 
     try:
         # Connect to MySQL database
-        vn.connect_to_mysql(host='localhost', dbname='cfms', user='newuser', password='newpassword', port=3306)
-        print("✅ Connected to MySQL database")
+        # vn.connect_to_mysql(host='localhost', dbname='cfms', user='newuser', password='newpassword', port=3306)
+        # print("✅ Connected to MySQL database")
         
         # Check if we have training data
         training_data = vn.get_training_data()

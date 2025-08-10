@@ -186,3 +186,8 @@ This simplified process downloads all Python packages as wheel files for reliabl
 - Downloads packages in logical groups to avoid complex dependency resolution
 - Converts any source packages to wheels for better compatibility
 - Provides step-by-step installation method for reliable offline deployment
+
+# New Packages
+```bash
+pip download -d docker_pkg/new --only-binary=:all: pydantic_settings
+```
