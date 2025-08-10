@@ -2,17 +2,22 @@ import os
 import requests
 from vanna.ollama import Ollama
 from vanna.chromadb import ChromaDB_VectorStore
+from core.config import settings
 
 class MyVanna(ChromaDB_VectorStore, Ollama):
     def __init__(self, config=None):
-        if config is None:
-            config = {}
+        if not os.path.exists(settings.RAG_LAYER_DIR):
+            os.makedirs(settings.RAG_LAYER_DIR)
+            print(f"📁 Created directory: {settings.RAG_LAYER_DIR}")
 
-        ollama_url = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
+        if config is None:
+            config = {"path": settings.RAG_LAYER_DIR}
+
+        ollama_url = settings.OLLAMA_HOST
         config["ollama_host"] = ollama_url
 
         # Choose model from env var or default
-        config["model"] = os.getenv("OLLAMA_MODEL", "phi4-mini:latest")
+        config["model"] = settings.OLLAMA_MODEL
         self.model = config["model"]
 
         # Explicitly set required attribute
@@ -22,18 +27,10 @@ class MyVanna(ChromaDB_VectorStore, Ollama):
         ChromaDB_VectorStore.__init__(self, config=config)
         Ollama.__init__(self, config=config)
 
-# Later in the script:
-OLLAMA_HOST = os.getenv("OLLAMA_HOST")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
+    def get_available_models(self):
+        res = requests.get(f"{settings.OLLAMA_HOST}/api/tags")
+        return [m["model"] for m in res.json().get("models", [])]
 
-# Fetch and print available models
-res = requests.get(f"{OLLAMA_HOST}/api/tags")
-print("Available models:", [m["model"] for m in res.json().get("models", [])])
+vn = MyVanna()
 
-# Create RAG-Layer directory if it doesn't exist
-rag_layer_dir = "RAG-Layer"
-if not os.path.exists(rag_layer_dir):
-    os.makedirs(rag_layer_dir)
-    print(f"📁 Created directory: {rag_layer_dir}")
-
-vn = MyVanna(config={"path": rag_layer_dir})
+print(vn.get_available_models())

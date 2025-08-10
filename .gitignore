@@ -45,9 +45,10 @@ venv.bak/
 
 # Project specific
 RAG-Layer/
-dep_pkg/
+local_dep_pkg/
 chroma/
 docker_pkg/
+dependencies/
 
 # IDE files
 .vscode/

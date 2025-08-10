@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     # todo: for unique users
     FIRST_SUPERUSER: str
     FIRST_SUPERUSER_PASSWORD: str
+    # todo: RAG_Layer DB
+    RAG_LAYER_DIR: str = "../RAG-Layer"
+    # Ollama
+    OLLAMA_MODEL: str
+    OLLAMA_HOST: str
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -68,7 +73,7 @@ class Settings(BaseSettings):
             username=self.MYSQL_USER,
             password=self.MYSQL_PASSWORD,
             host=self.MYSQL_SERVER,
-            # port=str(self.MYSQL_PORT),
+            port=self.MYSQL_PORT,
             path=f"{self.MYSQL_DB}",  # Ensure the path starts with "/"
         )
 
@@ -100,4 +105,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()  # type: ignore
-settings.print_all_setting()
+# settings.print_all_setting()
