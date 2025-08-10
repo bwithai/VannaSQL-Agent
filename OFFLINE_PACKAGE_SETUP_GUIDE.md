@@ -19,50 +19,50 @@ We'll download all dependencies as wheel files and resolve conflicts step by ste
 ### 1. Create Dependencies Directory
 ```bash
 # Create a directory to store all package files
-mkdir dep_pkg
+mkdir docker_pkg
 ```
 
 ### 2. Download Basic Build Dependencies
 ```bash
 # Download essential build tools (needed for any package installation)
-pip download -d dep_pkg --only-binary=:all: setuptools wheel
+pip download -d docker_pkg --only-binary=:all: setuptools wheel
 ```
 **Why this step?** Some packages require these tools even for wheel installation.
 
 ### 3. Download Security Dependencies
 ```bash
 # Download cryptography package (often has specific requirements)
-pip download -d dep_pkg --only-binary=:all: cryptography>=45.0.5
+pip download -d docker_pkg --only-binary=:all: cryptography>=45.0.5
 ```
 
 ### 4. Download Core Vanna Package
 ```bash
 # Download the main package without optional dependencies first
-pip download -d dep_pkg --only-binary=:all: vanna>=0.7.9
+pip download -d docker_pkg --only-binary=:all: vanna>=0.7.9
 ```
 **Why separately?** This avoids complex dependency resolution conflicts.
 
 ### 5. Download Database-Specific Dependencies
 ```bash
 # Download database-specific packages
-pip download -d dep_pkg --only-binary=:all: PyMySQL ollama psycopg2-binary db-dtypes
+pip download -d docker_pkg --only-binary=:all: PyMySQL ollama psycopg2-binary db-dtypes
 ```
 
 ### 6. Download ChromaDB (Latest Version)
 ```bash
 # Download ChromaDB separately to avoid version conflicts
-pip download -d dep_pkg --prefer-binary chromadb
+pip download -d docker_pkg --prefer-binary chromadb
 ```
 **Note:** This downloads the latest stable version (1.0.x) which works better than older versions.
 
 ### 7. Convert Any Source Packages to Wheels
 ```bash
 # Check if PyPika was downloaded as source and convert it
-pip wheel -w dep_pkg --find-links dep_pkg --no-deps PyPika==0.48.9
+pip wheel -w docker_pkg --find-links docker_pkg --no-deps PyPika==0.48.9
 
 # Remove any .tar.gz files (keep only .whl files)
 # Windows PowerShell:
-Get-ChildItem dep_pkg\*.tar.gz | Remove-Item
+Get-ChildItem docker_pkg\*.tar.gz | Remove-Item
 # Linux/Mac:
 # rm dep_pkg/*.tar.gz
 ```
@@ -111,7 +111,7 @@ pip install --find-links dep_pkg --no-index PyMySQL ollama psycopg2-binary db-dt
 ### Method 2: Install Everything at Once (Alternative)
 ```bash
 # Try to install all at once (may have dependency resolution issues)
-pip install --find-links dep_pkg --no-index vanna cryptography chromadb PyMySQL ollama psycopg2-binary db-dtypes
+pip install --find-links docker_pkg --no-index vanna cryptography chromadb PyMySQL ollama psycopg2-binary db-dtypes
 ```
 
 ### Verify Installation Works
