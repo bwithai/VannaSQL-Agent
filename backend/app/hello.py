@@ -1,6 +1,11 @@
+import os
+# import sys
+
+# # Ensure the project root (parent of this file's directory) is on sys.path so
+# # that the local `vanna` package can be imported when running this file directly.
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from vanna.ollama import Ollama
 from vanna.chromadb import ChromaDB_VectorStore
-import os
 
 class MyVanna(ChromaDB_VectorStore, Ollama):
     def __init__(self, config=None):
@@ -21,12 +26,12 @@ vn = MyVanna(config={
 
 print(f"📊 Using RAG-Layer directory: {os.path.abspath(rag_layer_dir)}")
 
-try:
-    vn.connect_to_mysql(host='localhost', dbname='cfms', user='newuser', password='newpassword', port=3306)
-    print("✅ Successfully connected to MySQL database")
-except Exception as e:
-    print(f"❌ Database connection failed: {e}")
-    exit(1)
+# try:
+#     vn.connect_to_mysql(host='localhost', dbname='cfms', user='newuser', password='newpassword', port=3306)
+#     print("✅ Successfully connected to MySQL database")
+# except Exception as e:
+#     print(f"❌ Database connection failed: {e}")
+#     exit(1)
 
 
 # vn.train(ddl="""CREATE TABLE `users` (

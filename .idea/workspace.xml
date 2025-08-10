@@ -5,10 +5,104 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="de6d83b6-4add-4635-bd07-fd95e67fc16a" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/OFFLINE_PACKAGE_SETUP_GUIDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/OFFLINE_PACKAGE_SETUP_GUIDE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/example_usage.py" beforeDir="false" afterPath="$PROJECT_DIR$/example_usage.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/uv.lock" beforeDir="false" afterPath="$PROJECT_DIR$/uv.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/VannaSQL-Agent.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/VannaSQL-Agent.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.python-version" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/OFFLINE_PACKAGE_SETUP_GUIDE.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/debugging.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/example_usage.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/examples-question.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/hello.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/reasoning_training.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/reasoning_vanna.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/remove_train_data.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/see_train_data.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/train-helper.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/train.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/vana_agent.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/web_interface.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/reasoning_config_guide.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/uv.lock" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/ZhipuAI/ZhipuAI_Chat.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/ZhipuAI/ZhipuAI_embeddings.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/ZhipuAI/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/advanced/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/anthropic/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/anthropic/anthropic_chat.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/azuresearch/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/azuresearch/azuresearch_vector.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/base/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/base/base.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/bedrock/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/bedrock/bedrock_converse.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/chromadb/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/chromadb/chromadb_vector.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/cohere/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/cohere/cohere_chat.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/cohere/cohere_embeddings.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/deepseek/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/deepseek/deepseek_chat.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/exceptions/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/faiss/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/faiss/faiss.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/flask/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/flask/assets.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/flask/auth.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/google/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/google/bigquery_vector.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/google/gemini_chat.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/hf/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/hf/hf.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/local.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/marqo/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/marqo/marqo.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/milvus/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/milvus/milvus_vector.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/mistral/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/mistral/mistral.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/mock/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/mock/embedding.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/mock/llm.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/mock/vectordb.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/ollama/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/ollama/ollama.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/openai/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/openai/openai_chat.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/openai/openai_embeddings.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/opensearch/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/opensearch/opensearch_vector.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/opensearch/opensearch_vector_semantic.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/oracle/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/oracle/oracle_vector.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/pgvector/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/pgvector/pgvector.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/pinecone/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/pinecone/pinecone_vector.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/qdrant/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/qdrant/qdrant.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/qianfan/Qianfan_Chat.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/qianfan/Qianfan_embeddings.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/qianfan/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/qianwen/QianwenAI_chat.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/qianwen/QianwenAI_embeddings.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/qianwen/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/remote.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/types/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/utils.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/vannadb/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/vannadb/vannadb_vector.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/vllm/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/vllm/vllm.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/weaviate/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/weaviate/weaviate_vector.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/xinference/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/vanna/xinference/xinference.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -30,9 +124,16 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "dev"
+    "git-widget-placeholder": "dev",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Office\Office\VannaSQL-Agent\backend\app\logic" />
+      <recent name="C:\Office\Office\VannaSQL-Agent\backend\app" />
+    </key>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>

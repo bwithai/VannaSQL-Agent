@@ -37,7 +37,7 @@ This project implements Vanna.AI to enable natural language querying of your MyS
 
 For offline environments without internet access, see our comprehensive guide:
 
-📖 **[Offline Package Setup Guide](OFFLINE_PACKAGE_SETUP_GUIDE.md)**
+📖 **[Offline Package Setup Guide](Docs/OFFLINE_PACKAGE_SETUP_GUIDE.md)**
 
 This guide covers:
 - Downloading all dependencies as wheel files

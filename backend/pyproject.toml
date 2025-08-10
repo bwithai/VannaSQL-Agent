@@ -1,0 +1,16 @@
+[project]
+name = "app"
+version = "0.1.0"
+description = "VannaSQL Agent with ChromaDB and Ollama integration"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb>=1.0.16",
+    "cryptography>=45.0.6",
+    "db-dtypes>=1.4.3",
+    "ollama>=0.5.3",
+    "plotly>=6.2.0",
+    "psycopg2-binary>=2.9.10",
+    "pymysql>=1.1.1",
+    "sqlparse>=0.5.3",
+]

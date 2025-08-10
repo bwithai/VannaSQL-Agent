@@ -15,8 +15,8 @@ class MyVanna(ChromaDB_VectorStore, Ollama):
         if config is None:
             config = {}
 
-        ollama_url = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
-        config["ollama_host"] = ollama_url
+        # ollama_url = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
+        # config["ollama_host"] = ollama_url
 
         # Choose model from env var or default
         config["model"] = os.getenv("OLLAMA_MODEL", "phi4-mini:latest")
@@ -74,7 +74,7 @@ def main():
         print("💡 Run 'python hello.py' to train your model.")
         return
 
-    check_ollama_connection()
+    # check_ollama_connection()
 
     print("🔌 Initializing VannaSQL Agent...")
     vn = MyVanna(config={"path": rag_layer_dir})
