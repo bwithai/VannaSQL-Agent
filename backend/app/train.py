@@ -1,11 +1,13 @@
 from vana_agent import vn
+from app.coree.config import settings, Settings
 
-# try:
-#     vn.connect_to_mysql(host='localhost', dbname='cfms', user='newuser', password='newpassword', port=3306)
-#     print("✅ Successfully connected to MySQL database")
-# except Exception as e:
-#     print(f"❌ Database connection failed: {e}")
-#     exit(1)
+try:
+    vn.connect_to_mysql(host=settings.MYSQL_SERVER, dbname=Settings.MYSQL_DB, user=settings.MYSQL_USER,
+                        password=Settings.MYSQL_PASSWORD, port=Settings.MYSQL_PORT)
+    print("✅ Successfully connected to MySQL database")
+except Exception as e:
+    print(f"❌ Database connection failed: {e}")
+    exit(1)
 
 # Train the model
 vn.train(documentation="""Our business defines formations as users in military and the corps, divs, brigades and units as the formations hierarchy and apartments as the formation appointments.

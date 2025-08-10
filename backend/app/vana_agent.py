@@ -2,7 +2,7 @@ import os
 import requests
 from vanna.ollama import Ollama
 from vanna.chromadb import ChromaDB_VectorStore
-from core.config import settings
+from coree.config import settings
 
 class MyVanna(ChromaDB_VectorStore, Ollama):
     def __init__(self, config=None):
@@ -32,5 +32,3 @@ class MyVanna(ChromaDB_VectorStore, Ollama):
         return [m["model"] for m in res.json().get("models", [])]
 
 vn = MyVanna()
-
-print(vn.get_available_models())
