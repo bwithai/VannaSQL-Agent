@@ -1,0 +1,57 @@
+[project]
+name = "app"
+version = "0.1.0"
+description = "VannaSQL Agent with ChromaDB and Ollama integration"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb>=1.0.16",
+    "cryptography>=45.0.6",
+    "db-dtypes>=1.4.3",
+    "flasgger>=0.9.7.1",
+    "flask-sock>=0.7.0",
+    "flask>=3.1.1",
+    "ollama>=0.5.3",
+    "plotly>=6.2.0",
+    "psycopg2-binary>=2.9.10",
+    "pymysql>=1.1.1",
+    "sqlparse>=0.5.3",
+    "pandas>=2.3.1",
+    "requests>=2.32.4",
+    "pydantic-settings>=2.10.1",
+    "sqlmodel>=0.0.24",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.mypy]
+strict = true
+exclude = ["venv", ".venv", "alembic"]
+
+[tool.ruff]
+target-version = "py310"
+exclude = ["alembic"]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG001", # unused arguments in functions
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "W191",  # indentation contains tabs
+    "B904",  # Allow raising exceptions without from e, for HTTPException
+]
+
+[tool.ruff.lint.pyupgrade]
+# Preserve types, even if a file imports `from __future__ import annotations`.
+keep-runtime-typing = true

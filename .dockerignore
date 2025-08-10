@@ -1,0 +1,82 @@
+# Offline packages - we'll install from PyPI in Docker
+dep_pkg/
+
+# Python cache and build files
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.coverage.*
+*.cover
+*.py,cover
+.hypothesis/
+
+# Virtual environments (we'll create fresh in Docker)
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+python_env/
+.python-version
+
+
+# IDE and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation and guides (not needed in container)
+*.md
+OFFLINE_PACKAGE_SETUP_GUIDE.md
+reasoning_config_guide.md
+
+# Log files
+*.log
+logs/
+
+# Local data directories (will be mounted as volumes)
+RAG-Layer/
+
+# Large example/test files
+examples-question.yml

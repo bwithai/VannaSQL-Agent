@@ -1,0 +1,75 @@
+services:
+  db:
+    image: mysql:8
+    restart: always
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    volumes:
+      - app-db-data:/var/lib/mysql
+    env_file:
+      - .env
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD?Variable not set}
+      - MYSQL_DATABASE=${MYSQL_DB?Variable not set}
+      - MYSQL_USER=${MYSQL_USER?Variable not set}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD?Variable not set}
+
+  adminer:
+    image: adminer
+    restart: always
+    networks:
+      - traefik-public
+      - default
+    depends_on:
+      - db
+    environment:
+      - ADMINER_DESIGN=pepa-linha-dark
+
+  backend:
+    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    restart: always
+    networks:
+      - traefik-public
+      - default
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DOMAIN=${DOMAIN}
+      - FRONTEND_HOST=${FRONTEND_HOST?Variable not set}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS}
+      - SECRET_KEY=${SECRET_KEY?Variable not set}
+      - FIRST_SUPERUSER=${FIRST_SUPERUSER?Variable not set}
+      - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD?Variable not set}
+      - MYSQL_SERVER=db
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_DATABASE=${MYSQL_DB}
+      - MYSQL_USER=${MYSQL_USER?Variable not set}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD?Variable not set}
+      - OLLAMA_HOST=${OLLAMA_HOST?Variable not set}
+      - OLLAMA_MODEL=${OLLAMA_MODEL?Variable not set}
+    volumes:
+      - ./backend/app:/app/app  # Only mount the app directory
+      - ./RAG-Layer:/app/RAG-Layer  # Mount RAG-Layer for persistent ChromaDB storage
+      - ./dependencies/docker_pkg:/app/docker_pkg # Install Dependencies from here intead of PYPI
+      - ./chroma:/root/.cache/chroma
+      - ./dependencies/uv:/bin/uv
+      - ./dependencies/uvx:/bin/uvx
+    build:
+      context: ./backend
+
+volumes:
+  app-db-data:
+
+networks:
+  traefik-public:
+    # docker network create traefik-public
+    # Allow setting it to false for testing
+    external: true
