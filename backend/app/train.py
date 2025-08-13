@@ -1,4 +1,4 @@
-from vana_agent import vn
+from app.vana_agent import vn
 from app.core.config import settings
 
 try:
