@@ -3,12 +3,8 @@ from sqlmodel import Session, create_engine, SQLModel
 from app.core.config import settings
 
 # Ensure models are imported so SQLModel metadata is populated
-try:
-    # When running as a module: python -m app.core.db
-    from app.schemas import models as inventory_models  # type: ignore
-except Exception:  # Fallback when running the file directly
-    from schemas import models as inventory_models  # type: ignore
-
+# When running as a module: python -m app.core.db
+from app.schemas.models import DisciplineData
 
 engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
 
@@ -18,12 +14,14 @@ def create_tables() -> None:
 
 
 def init_db(session: Session) -> None:
-    # Create tables then seed inventory dummy data (idempotent)
+    # Create tables then seed discipline dummy data (idempotent)
     create_tables()
     try:
-        inventory_models.seed_inventory_data(session)
-    except Exception:
+        from app.schemas.models import seed_inventory_data
+        seed_inventory_data(session)
+    except Exception as e:
         # Avoid failing init if seeding encounters an issue
+        print(f"Warning: Seeding failed: {e}")
         pass
 
 

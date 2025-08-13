@@ -73,7 +73,7 @@ Get-ChildItem docker_pkg\*.tar.gz | Remove-Item
 ```bash
 # Test if all dependencies can be resolved (dry run - doesn't actually install)
 # Note: This may take time due to dependency resolution, but should eventually succeed
-pip install --find-links dep_pkg --no-index --dry-run vanna cryptography chromadb PyMySQL ollama psycopg2-binary db-dtypes
+pip install --find-links docker_pkg --no-index --dry-run cryptography chromadb PyMySQL ollama psycopg2-binary db-dtypes
 ```
 **What to expect:** List of packages that "Would install" - this means success!
 
@@ -111,7 +111,7 @@ pip install --find-links dep_pkg --no-index PyMySQL ollama psycopg2-binary db-dt
 ### Method 2: Install Everything at Once (Alternative)
 ```bash
 # Try to install all at once (may have dependency resolution issues)
-pip install --find-links docker_pkg --no-index vanna cryptography chromadb PyMySQL ollama psycopg2-binary db-dtypes
+uv pip install --find-links docker_pkg --no-index cryptography chromadb PyMySQL ollama psycopg2-binary db-dtypes pydantic_settings sqlparse plotly tabulate
 ```
 
 ### Verify Installation Works

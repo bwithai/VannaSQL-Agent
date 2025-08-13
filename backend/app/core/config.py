@@ -99,7 +99,7 @@ class Settings(BaseSettings):
         return self
 
     def print_all_setting(self) -> None:
-        settings_dict = self.dict()
+        settings_dict = self.model_dump()
         for key, value in settings_dict.items():
             print(f"{key}: {value}")
 
