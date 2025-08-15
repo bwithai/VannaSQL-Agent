@@ -41,7 +41,7 @@ def main():
         print(f"📁 Using RAG-Layer directory: {os.path.abspath(rag_layer_dir)}")
         
         # Create Flask app
-        app = VannaFlaskApp(vn, allow_llm_to_see_data=True)
+        app = VannaFlaskApp(vn, allow_llm_to_see_data=True, debug=True, function_generation=False)
         
         print("🌐 Starting VannaSQL-Agent Web Interface...")
         print("📱 Open your browser and go to: http://localhost:5000")

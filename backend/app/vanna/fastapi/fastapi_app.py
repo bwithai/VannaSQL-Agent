@@ -79,6 +79,12 @@ class VannaFastAPIApp(VannaFastAPI):
             auth=auth or AsyncNoAuth(),
             allow_llm_to_see_data=allow_llm_to_see_data,
             chart=chart,
+            redraw_chart=redraw_chart,
+            auto_fix_sql=auto_fix_sql,
+            ask_results_correct=ask_results_correct,
+            followup_questions=followup_questions,
+            summarization=summarization,
+            function_generation=function_generation,
         )
 
         # Update config with UI settings

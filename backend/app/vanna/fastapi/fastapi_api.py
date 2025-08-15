@@ -52,6 +52,11 @@ class DeleteFunctionRequest(BaseModel):
     function_name: str
 
 
+class RewrittenQuestionRequest(BaseModel):
+    last_question: str
+    new_question: str
+
+
 class VannaFastAPI:
     """
     Async FastAPI implementation for Vanna.
@@ -64,6 +69,12 @@ class VannaFastAPI:
         auth: Optional[AsyncAuthInterface] = None,
         allow_llm_to_see_data: bool = False,
         chart: bool = True,
+        redraw_chart: bool = True,
+        auto_fix_sql: bool = True,
+        ask_results_correct: bool = True,
+        followup_questions: bool = True,
+        summarization: bool = True,
+        function_generation: bool = True,
     ):
         self.app = FastAPI(title="Vanna API", description="AI-powered SQL generation API")
         self.vn = vn
@@ -71,10 +82,22 @@ class VannaFastAPI:
         self.auth = auth or AsyncNoAuth()
         self.allow_llm_to_see_data = allow_llm_to_see_data
         self.chart = chart
+        self.redraw_chart = redraw_chart
+        self.auto_fix_sql = auto_fix_sql
+        self.ask_results_correct = ask_results_correct
+        self.followup_questions = followup_questions
+        self.summarization = summarization
+        self.function_generation = function_generation and hasattr(vn, "get_function")
         
         self.config = {
             "allow_llm_to_see_data": allow_llm_to_see_data,
             "chart": chart,
+            "redraw_chart": redraw_chart,
+            "auto_fix_sql": auto_fix_sql,
+            "ask_results_correct": ask_results_correct,
+            "followup_questions": followup_questions,
+            "summarization": summarization,
+            "function_generation": self.function_generation,
         }
 
         # Setup logging
@@ -83,48 +106,184 @@ class VannaFastAPI:
         # Register routes
         self._register_routes()
 
+    async def _run_sql_with_retry(self, cache_id: str, original_sql: str, max_retries: int = 2):
+        """
+        Run SQL with automatic retry and error correction using LLM.
+        
+        Args:
+            cache_id: Cache ID for storing intermediate results
+            original_sql: The initial SQL to execute
+            max_retries: Maximum number of retry attempts (default: 2)
+            
+        Returns:
+            Tuple of (dataframe, final_sql, error_history)
+            - dataframe: pandas DataFrame if successful, None if failed
+            - final_sql: The final SQL that worked (might be corrected)
+            - error_history: List of error attempts and corrections
+        """
+        current_sql = original_sql
+        error_history = []
+        
+        # Log the start of SQL execution with retry capability
+        self.vn.log(f"🔄 Starting SQL execution with auto-retry for query {cache_id}", "SQL Auto-Retry")
+        self.vn.log(f"📝 Original SQL: {original_sql}", "SQL Auto-Retry")
+        self.vn.log(f"⚙️ Max retries configured: {max_retries}", "SQL Auto-Retry")
+        
+        for attempt in range(max_retries + 1):  # +1 for original attempt
+            # Log each attempt
+            self.vn.log(f"🚀 Attempt {attempt + 1}/{max_retries + 1}: Executing SQL", "SQL Auto-Retry")
+            if attempt > 0:
+                self.vn.log(f"🔧 Using corrected SQL: {current_sql}", "SQL Auto-Retry")
+            
+            try:
+                # Try to execute the SQL
+                df = await asyncio.get_event_loop().run_in_executor(
+                    None, self.vn.run_sql, current_sql
+                )
+                
+                # Success! Log the result
+                if attempt == 0:
+                    self.vn.log(f"✅ SQL executed successfully on first attempt!", "SQL Auto-Retry")
+                else:
+                    self.vn.log(f"✅ SQL executed successfully after {attempt} correction(s)!", "SQL Auto-Retry")
+                self.vn.log(f"📊 Query returned {len(df)} rows", "SQL Auto-Retry")
+                
+                return df, current_sql, error_history
+                
+            except Exception as db_error:
+                error_message = str(db_error)
+                
+                # Log the database error
+                self.vn.log(f"❌ Attempt {attempt + 1} failed with database error: {error_message}", "SQL Auto-Retry")
+                
+                # Store this error attempt
+                error_attempt = {
+                    "attempt": attempt + 1,
+                    "sql": current_sql,
+                    "database_error": error_message,
+                    "timestamp": asyncio.get_event_loop().time()
+                }
+                
+                # If this is the last attempt, add the error and break
+                if attempt >= max_retries:
+                    self.vn.log(f"🛑 Max retries ({max_retries}) reached. No more attempts will be made.", "SQL Auto-Retry")
+                    error_history.append(error_attempt)
+                    break
+                
+                # Ask LLM to fix the SQL based on the database error
+                self.vn.log(f"🤖 Asking LLM to generate corrected SQL for attempt {attempt + 2}...", "SQL Auto-Retry")
+                
+                try:
+                    # Get original question from cache
+                    original_question = await self.cache.get(id=cache_id, field="question")
+                    
+                    self.vn.log(f"📋 Original question: {original_question}", "SQL Auto-Retry")
+                    self.vn.log(f"🔍 Sending error to LLM: {error_message[:100]}...", "SQL Auto-Retry")
+                    
+                    # Generate corrected SQL
+                    corrected_sql = await self._ask_llm_to_fix_sql(
+                        original_question or "Query execution",
+                        current_sql, 
+                        error_message,
+                        attempt + 1
+                    )
+                    
+                    error_attempt["corrected_sql"] = corrected_sql
+                    error_history.append(error_attempt)
+                    
+                    # Log the LLM correction
+                    self.vn.log(f"✨ LLM generated corrected SQL: {corrected_sql}", "SQL Auto-Retry")
+                    
+                    # Use the corrected SQL for next attempt
+                    current_sql = corrected_sql
+                    
+                    # Store intermediate correction in cache
+                    await self.cache.set(
+                        id=cache_id, 
+                        field=f"sql_attempt_{attempt + 2}", 
+                        value=corrected_sql
+                    )
+                    
+                    self.vn.log(f"💾 Cached corrected SQL for next attempt", "SQL Auto-Retry")
+                    
+                except Exception as llm_error:
+                    # LLM failed to generate correction
+                    self.vn.log(f"🚫 LLM failed to generate correction: {str(llm_error)}", "SQL Auto-Retry")
+                    error_attempt["llm_error"] = str(llm_error)
+                    error_attempt["user_explanation"] = (
+                        f"Database error: {error_message}. "
+                        f"Unable to auto-correct SQL due to LLM error: {str(llm_error)}"
+                    )
+                    error_history.append(error_attempt)
+                    break
+        
+        # All attempts failed
+        self.vn.log(f"💥 All {max_retries + 1} attempts failed. Returning error to user.", "SQL Auto-Retry")
+        return None, current_sql, error_history
+
+    async def _ask_llm_to_fix_sql(self, question: str, failed_sql: str, error_message: str, attempt: int) -> str:
+        """
+        Ask the LLM to fix SQL based on database error.
+        """
+        self.vn.log(f"🛠️ Building correction prompt for attempt #{attempt}", "SQL Auto-Retry")
+        
+        fix_prompt = (
+            f"The following SQL query failed with a database error:\n\n"
+            f"Original Question: {question}\n\n"
+            f"Failed SQL:\n```sql\n{failed_sql}\n```\n\n"
+            f"Database Error: {error_message}\n\n"
+            f"This is correction attempt #{attempt}. Please provide a corrected SQL query that fixes this specific error. "
+            f"Respond with only the corrected SQL query, no explanations."
+        )
+        
+        self.vn.log(f"📤 Sending correction request to LLM (phi4-mini)", "SQL Auto-Retry")
+        
+        # Generate corrected SQL using LLM
+        corrected_sql = await asyncio.get_event_loop().run_in_executor(
+            None, self.vn.generate_sql, fix_prompt, False  # Don't allow LLM to see data for error correction
+        )
+        
+        self.vn.log(f"📥 LLM returned corrected SQL: {corrected_sql[:100]}{'...' if len(corrected_sql) > 100 else ''}", "SQL Auto-Retry")
+        
+        return corrected_sql
+
+
+
+    def _generate_enhanced_question(self, prompt: str) -> str:
+        """
+        Generate an enhanced question using LLM (synchronous method for thread executor).
+        """
+        try:
+            # Use the VannaBase's LLM to generate enhanced question
+            if hasattr(self.vn, 'submit_prompt'):
+                # For models that support direct prompt submission
+                messages = [
+                    self.vn.system_message("You are a helpful AI assistant that rewrites questions to be more specific and clear based on additional context. Always respond with just the rewritten question."),
+                    self.vn.user_message(prompt)
+                ]
+                response = self.vn.submit_prompt(messages)
+                return response.strip()
+            else:
+                # Fallback: use generate_sql method but adapt the prompt
+                question_request = f"Rewrite this question based on additional context (respond with question only, no SQL):\n\n{prompt}"
+                response = self.vn.generate_sql(question_request, allow_llm_to_see_data=False)
+                
+                # Clean up any SQL code blocks that might be in the response
+                import re
+                response = re.sub(r'```sql.*?```', '', response, flags=re.DOTALL)
+                response = re.sub(r'```.*?```', '', response, flags=re.DOTALL)
+                
+                return response.strip()
+                
+        except Exception as e:
+            raise Exception(f"LLM enhanced question generation failed: {str(e)}")
+
     async def get_current_user(self, request: Request):
         """Dependency to get current user."""
         user = await self.auth.get_user(request)
         if not await self.auth.is_logged_in(user):
             raise HTTPException(status_code=401, detail="Not authenticated")
         return user
-
-    async def requires_cache_fields(
-        self, 
-        request: Request, 
-        required_fields: List[str], 
-        optional_fields: Optional[List[str]] = None
-    ):
-        """Dependency to check cache requirements."""
-        optional_fields = optional_fields or []
-        
-        # Get ID from query params or JSON body
-        cache_id = request.query_params.get("id")
-        if not cache_id and request.method == "POST":
-            try:
-                body = await request.json()
-                cache_id = body.get("id")
-            except:
-                pass
-                
-        if not cache_id:
-            raise HTTPException(status_code=400, detail="No id provided")
-
-        # Check required fields
-        field_values = {}
-        for field in required_fields:
-            value = await self.cache.get(id=cache_id, field=field)
-            if value is None:
-                raise HTTPException(status_code=400, detail=f"No {field} found")
-            field_values[field] = value
-
-        # Get optional fields
-        for field in optional_fields:
-            field_values[field] = await self.cache.get(id=cache_id, field=field)
-
-        field_values["id"] = cache_id
-        return field_values
 
     def _register_routes(self):
         """Register all API routes."""
@@ -217,13 +376,14 @@ class VannaFastAPI:
 
         @self.app.get("/api/v0/run_sql")
         async def run_sql(
-            request: Request,
-            cache_data=Depends(lambda r: self.requires_cache_fields(r, ["sql"])),
+            id: str,
             user=Depends(self.get_current_user)
         ):
             """Execute SQL query and return results."""
-            cache_id = cache_data["id"]
-            sql = cache_data["sql"]
+            # Get SQL from cache
+            sql = await self.cache.get(id=id, field="sql")
+            if sql is None:
+                raise HTTPException(status_code=400, detail="No SQL found for this ID")
 
             if not self.vn.run_sql_is_set:
                 raise HTTPException(
@@ -232,41 +392,70 @@ class VannaFastAPI:
                 )
 
             try:
-                # Run SQL asynchronously
-                df = await asyncio.get_event_loop().run_in_executor(
-                    None, self.vn.run_sql, sql
-                )
+                # Log the start of SQL execution
+                self.vn.log(f"🏁 Starting SQL execution for query ID: {id}", "SQL Execution")
+                self.vn.log(f"📄 SQL to execute: {sql}", "SQL Execution")
+                
+                # Try to run SQL with auto-retry on error
+                df, final_sql, error_history = await self._run_sql_with_retry(id, sql)
+                
+                if df is not None:
+                    # Success - log and store results
+                    self.vn.log(f"🎉 SQL execution completed successfully!", "SQL Execution")
+                    if final_sql != sql:
+                        self.vn.log(f"🔧 SQL was auto-corrected during execution", "SQL Execution")
+                    
+                    await self.cache.set(id=id, field="df", value=df)
+                    await self.cache.set(id=id, field="sql", value=final_sql)  # Store the corrected SQL
+                    
+                    # Store error history for debugging
+                    if error_history:
+                        await self.cache.set(id=id, field="error_history", value=error_history)
+                        self.vn.log(f"📚 Stored error history with {len(error_history)} correction attempts", "SQL Execution")
 
-                await self.cache.set(id=cache_id, field="df", value=df)
+                    # Check if chart should be generated
+                    should_generate_chart = self.chart and await asyncio.get_event_loop().run_in_executor(
+                        None, self.vn.should_generate_chart, df
+                    )
 
-                # Check if chart should be generated
-                should_generate_chart = self.chart and await asyncio.get_event_loop().run_in_executor(
-                    None, self.vn.should_generate_chart, df
-                )
-
-                return {
-                    "type": "df",
-                    "id": cache_id,
-                    "df": df.head(10).to_json(orient='records', date_format='iso'),
-                    "should_generate_chart": should_generate_chart,
-                }
+                    return {
+                        "type": "df",
+                        "id": id,
+                        "df": df.head(10).to_json(orient='records', date_format='iso'),
+                        "should_generate_chart": should_generate_chart,
+                        "sql_corrected": final_sql != sql,  # Indicate if SQL was auto-corrected
+                        "correction_attempts": len(error_history) if error_history else 0
+                    }
+                else:
+                    # Failed after retries - return conversation questions to gather more context
+                    self.vn.log(f"💔 SQL execution failed after all retry attempts", "SQL Execution")
+                    self.vn.log(f"📊 Total error attempts: {len(error_history)}", "SQL Execution")
+                    
+                    # Create a more human response asking for clarification
+                    original_question = await self.cache.get(id=id, field="question") or "your question"
+                    
+                    return f"I'm having trouble generating the right SQL for '{original_question}'. Could you provide more context or clarify what specific information you're looking for? This will help me understand your request better."
 
             except Exception as e:
-                return {"type": "sql_error", "error": str(e)}
+                return {"type": "sql_error", "error": f"Unexpected error: {str(e)}"}
 
         @self.app.post("/api/v0/fix_sql")
         async def fix_sql(
             fix_request: FixSQLRequest,
-            request: Request,
             user=Depends(self.get_current_user)
         ):
             """Fix SQL based on error message."""
-            cache_data = await self.requires_cache_fields(
-                request, ["question", "sql"]
-            )
+            # Get required data from cache
+            question = await self.cache.get(id=fix_request.id, field="question")
+            sql = await self.cache.get(id=fix_request.id, field="sql")
+            
+            # Check if required data exists
+            if question is None:
+                raise HTTPException(status_code=400, detail="No question found for this ID")
+            if sql is None:
+                raise HTTPException(status_code=400, detail="No SQL found for this ID")
+            
             cache_id = fix_request.id
-            question = cache_data["question"]
-            sql = cache_data["sql"]
             error = fix_request.error
 
             fix_question = f"I have an error: {error}\n\nHere is the SQL I tried to run: {sql}\n\nThis is the question I was trying to answer: {question}\n\nCan you rewrite the SQL to fix the error?"
@@ -304,38 +493,46 @@ class VannaFastAPI:
 
         @self.app.get("/api/v0/download_csv")
         async def download_csv(
-            request: Request,
-            cache_data=Depends(lambda r: self.requires_cache_fields(r, ["df"])),
+            id: str,
             user=Depends(self.get_current_user)
         ):
             """Download query results as CSV."""
-            cache_id = cache_data["id"]
-            df = cache_data["df"]
+            # Get dataframe from cache
+            df = await self.cache.get(id=id, field="df")
+            if df is None:
+                raise HTTPException(status_code=400, detail="No dataframe found for this ID")
 
             csv_content = df.to_csv()
             
             return StreamingResponse(
                 iter([csv_content]),
                 media_type="text/csv",
-                headers={"Content-Disposition": f"attachment; filename={cache_id}.csv"}
+                headers={"Content-Disposition": f"attachment; filename={id}.csv"}
             )
 
         @self.app.get("/api/v0/generate_plotly_figure")
         async def generate_plotly_figure(
-            request: Request,
+            id: str,
             chart_instructions: Optional[str] = None,
-            cache_data=Depends(lambda r: self.requires_cache_fields(r, ["df", "question", "sql"])),
             user=Depends(self.get_current_user)
         ):
             """Generate Plotly visualization."""
-            cache_id = cache_data["id"]
-            df = cache_data["df"]
-            question = cache_data["question"]
-            sql = cache_data["sql"]
+            # Get required data from cache
+            df = await self.cache.get(id=id, field="df")
+            question = await self.cache.get(id=id, field="question")
+            sql = await self.cache.get(id=id, field="sql")
+            
+            # Check if required data exists
+            if df is None:
+                raise HTTPException(status_code=400, detail="No dataframe found for this ID")
+            if question is None:
+                raise HTTPException(status_code=400, detail="No question found for this ID")
+            if sql is None:
+                raise HTTPException(status_code=400, detail="No SQL found for this ID")
 
             try:
                 if chart_instructions is None or len(chart_instructions) == 0:
-                    code = await self.cache.get(id=cache_id, field="plotly_code")
+                    code = await self.cache.get(id=id, field="plotly_code")
                 else:
                     enhanced_question = f"{question}. When generating the chart, use these special instructions: {chart_instructions}"
                     code = await asyncio.get_event_loop().run_in_executor(
@@ -345,22 +542,106 @@ class VannaFastAPI:
                         sql,
                         f"Running df.dtypes gives:\n {df.dtypes}"
                     )
-                    await self.cache.set(id=cache_id, field="plotly_code", value=code)
+                    await self.cache.set(id=id, field="plotly_code", value=code)
 
                 fig = await asyncio.get_event_loop().run_in_executor(
                     None, self.vn.get_plotly_figure, code, df, False
                 )
                 fig_json = fig.to_json()
 
-                await self.cache.set(id=cache_id, field="fig_json", value=fig_json)
+                await self.cache.set(id=id, field="fig_json", value=fig_json)
 
                 return {
                     "type": "plotly_figure",
-                    "id": cache_id,
+                    "id": id,
                     "fig": fig_json,
                 }
             except Exception as e:
                 return {"type": "error", "error": str(e)}
+
+        @self.app.get("/api/v0/generate_rewritten_question")
+        async def generate_rewritten_question(
+            last_question: str,
+            new_question: str,
+            user=Depends(self.get_current_user)
+        ):
+            """Generate a rewritten question by combining last and new questions if related."""
+            rewritten_question = await asyncio.get_event_loop().run_in_executor(
+                None, self.vn.generate_rewritten_question, last_question, new_question
+            )
+
+            return {
+                "type": "rewritten_question", 
+                "question": rewritten_question
+            }
+
+        @self.app.post("/api/v0/answer_conversation")
+        async def answer_conversation(
+            request: Dict[str, Any],
+            user=Depends(self.get_current_user)
+        ):
+            """Handle user's answers to conversation questions and generate a better question."""
+            cache_id = request.get("id")
+            answers = request.get("answers", {})  # Dict of question -> answer
+            
+            if not cache_id:
+                raise HTTPException(status_code=400, detail="No cache ID provided")
+            
+            # Get original question
+            original_question = await self.cache.get(id=cache_id, field="question")
+            if not original_question:
+                raise HTTPException(status_code=400, detail="No original question found for this ID")
+            
+            # Create context from user answers
+            context_parts = []
+            for question, answer in answers.items():
+                if answer and answer.strip():
+                    context_parts.append(f"Q: {question}\nA: {answer}")
+            
+            context_text = "\n\n".join(context_parts)
+            
+            # Generate a better question with the new context
+            enhanced_prompt = f"""
+Based on the user's original question and their additional context, generate a more specific and clear question that better captures what they want.
+
+Original Question: {original_question}
+
+Additional Context from User:
+{context_text}
+
+Generate a rewritten question that:
+1. Incorporates the additional context provided
+2. Is more specific about what data they want
+3. Includes relevant filters, timeframes, or conditions mentioned
+4. Is clear enough to generate accurate SQL
+
+Return only the rewritten question, nothing else.
+"""
+
+            try:
+                rewritten_question = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    self._generate_enhanced_question,
+                    enhanced_prompt
+                )
+                
+                # Store the enhanced question for potential new SQL generation
+                await self.cache.set(id=cache_id, field="enhanced_question", value=rewritten_question)
+                await self.cache.set(id=cache_id, field="conversation_context", value=answers)
+                
+                return {
+                    "type": "enhanced_question",
+                    "original_question": original_question,
+                    "enhanced_question": rewritten_question,
+                    "id": cache_id,
+                    "message": "Based on your answers, here's a more specific version of your question:"
+                }
+                
+            except Exception as e:
+                return {
+                    "type": "error", 
+                    "error": f"Failed to enhance question: {str(e)}"
+                }
 
         @self.app.get("/api/v0/get_training_data")
         async def get_training_data(user=Depends(self.get_current_user)):
@@ -417,15 +698,22 @@ class VannaFastAPI:
 
         @self.app.get("/api/v0/generate_followup_questions")
         async def generate_followup_questions(
-            request: Request,
-            cache_data=Depends(lambda r: self.requires_cache_fields(r, ["df", "question", "sql"])),
+            id: str,
             user=Depends(self.get_current_user)
         ):
             """Generate followup questions."""
-            cache_id = cache_data["id"]
-            df = cache_data["df"]
-            question = cache_data["question"]
-            sql = cache_data["sql"]
+            # Get required data from cache
+            df = await self.cache.get(id=id, field="df")
+            question = await self.cache.get(id=id, field="question")
+            sql = await self.cache.get(id=id, field="sql")
+            
+            # Check if required data exists
+            if df is None:
+                raise HTTPException(status_code=400, detail="No dataframe found for this ID")
+            if question is None:
+                raise HTTPException(status_code=400, detail="No question found for this ID")
+            if sql is None:
+                raise HTTPException(status_code=400, detail="No SQL found for this ID")
 
             if self.allow_llm_to_see_data:
                 followup_questions = await asyncio.get_event_loop().run_in_executor(
@@ -434,52 +722,120 @@ class VannaFastAPI:
                 if followup_questions is not None and len(followup_questions) > 5:
                     followup_questions = followup_questions[:5]
 
-                await self.cache.set(id=cache_id, field="followup_questions", value=followup_questions)
+                await self.cache.set(id=id, field="followup_questions", value=followup_questions)
 
                 return {
                     "type": "question_list",
-                    "id": cache_id,
+                    "id": id,
                     "questions": followup_questions,
                     "header": "Here are some potential followup questions:",
                 }
             else:
-                await self.cache.set(id=cache_id, field="followup_questions", value=[])
+                await self.cache.set(id=id, field="followup_questions", value=[])
                 return {
                     "type": "question_list",
-                    "id": cache_id,
+                    "id": id,
                     "questions": [],
                     "header": "Followup Questions can be enabled if you set allow_llm_to_see_data=True",
                 }
 
         @self.app.get("/api/v0/generate_summary")
         async def generate_summary(
-            request: Request,
-            cache_data=Depends(lambda r: self.requires_cache_fields(r, ["df", "question"])),
+            id: str,
             user=Depends(self.get_current_user)
         ):
             """Generate summary of results."""
-            cache_id = cache_data["id"]
-            df = cache_data["df"]
-            question = cache_data["question"]
+            # Get required data from cache
+            df = await self.cache.get(id=id, field="df")
+            question = await self.cache.get(id=id, field="question")
+            
+            # Check if required data exists
+            if df is None:
+                raise HTTPException(status_code=400, detail="No dataframe found for this ID")
+            if question is None:
+                raise HTTPException(status_code=400, detail="No question found for this ID")
 
             if self.allow_llm_to_see_data:
                 summary = await asyncio.get_event_loop().run_in_executor(
                     None, self.vn.generate_summary, question, df
                 )
 
-                await self.cache.set(id=cache_id, field="summary", value=summary)
+                await self.cache.set(id=id, field="summary", value=summary)
 
                 return {
                     "type": "text",
-                    "id": cache_id,
+                    "id": id,
                     "text": summary,
                 }
             else:
                 return {
                     "type": "text",
-                    "id": cache_id,
+                    "id": id,
                     "text": "Summarization can be enabled if you set allow_llm_to_see_data=True",
                 }
+
+        @self.app.get("/api/v0/load_question")
+        async def load_question(
+            id: str,
+            user=Depends(self.get_current_user)
+        ):
+            """Load a previously cached question with all its data."""
+            self.vn.log(f"🔍 Loading question data for ID: {id}", "Load Question")
+            
+            # Get required data from cache
+            question = await self.cache.get(id=id, field="question")
+            sql = await self.cache.get(id=id, field="sql")
+            df = await self.cache.get(id=id, field="df")
+            
+            # Log what we found
+            self.vn.log(f"📋 Found question: {'✅' if question else '❌'}", "Load Question")
+            self.vn.log(f"📋 Found SQL: {'✅' if sql else '❌'}", "Load Question")
+            self.vn.log(f"📋 Found dataframe: {'✅' if df is not None else '❌'}", "Load Question")
+            
+            # Be more lenient - only require question and SQL, make df optional
+            if question is None:
+                self.vn.log(f"❌ Missing question for ID: {id}", "Load Question")
+                raise HTTPException(status_code=400, detail="No question found for this ID")
+            if sql is None:
+                self.vn.log(f"❌ Missing SQL for ID: {id}", "Load Question")
+                raise HTTPException(status_code=400, detail="No SQL found for this ID")
+            
+            # Get optional data from cache
+            fig_json = await self.cache.get(id=id, field="fig_json")
+            summary = await self.cache.get(id=id, field="summary")
+            
+            self.vn.log(f"📋 Found chart: {'✅' if fig_json else '❌'}", "Load Question")
+            self.vn.log(f"📋 Found summary: {'✅' if summary else '❌'}", "Load Question")
+            
+            try:
+                response_data = {
+                    "type": "question_cache",
+                    "id": id,
+                    "question": question,
+                    "sql": sql,
+                    "df": None,  # Will be set below if df exists
+                    "fig": fig_json,
+                    "summary": summary,
+                }
+                
+                # Handle dataframe - if it exists, convert to JSON, otherwise return empty array
+                if df is not None:
+                    try:
+                        response_data["df"] = df.head(10).to_json(orient="records", date_format="iso")
+                        self.vn.log(f"✅ Successfully converted dataframe to JSON", "Load Question")
+                    except Exception as df_error:
+                        self.vn.log(f"⚠️ Error converting dataframe: {str(df_error)}", "Load Question")
+                        response_data["df"] = "[]"  # Empty array as fallback
+                else:
+                    response_data["df"] = "[]"  # Empty array if no dataframe
+                    self.vn.log(f"⚠️ No dataframe found, returning empty array", "Load Question")
+                
+                self.vn.log(f"✅ Successfully loaded question data for ID: {id}", "Load Question")
+                return response_data
+                
+            except Exception as e:
+                self.vn.log(f"❌ Error preparing response: {str(e)}", "Load Question")
+                return {"type": "error", "error": str(e)}
 
         @self.app.get("/api/v0/get_question_history")
         async def get_question_history(user=Depends(self.get_current_user)):
@@ -489,6 +845,243 @@ class VannaFastAPI:
                 "type": "question_history",
                 "questions": questions,
             }
+
+        @self.app.get("/api/v0/get_error_history")
+        async def get_error_history(
+            id: str,
+            user=Depends(self.get_current_user)
+        ):
+            """Get error history and correction attempts for a specific query."""
+            error_history = await self.cache.get(id=id, field="error_history")
+            
+            if error_history is None:
+                return {
+                    "type": "error_history",
+                    "id": id,
+                    "error_history": [],
+                    "message": "No error history found for this query."
+                }
+            
+            return {
+                "type": "error_history",
+                "id": id,
+                "error_history": error_history,
+                "total_attempts": len(error_history)
+            }
+
+        @self.app.get("/api/v0/debug_cache")
+        async def debug_cache(
+            id: str,
+            user=Depends(self.get_current_user)
+        ):
+            """Debug endpoint to see what's actually cached for a given ID."""
+            fields_to_check = ["question", "sql", "df", "fig_json", "summary", "error_history"]
+            cache_status = {}
+            
+            for field in fields_to_check:
+                value = await self.cache.get(id=id, field=field)
+                cache_status[field] = {
+                    "exists": value is not None,
+                    "type": type(value).__name__ if value is not None else "None",
+                    "preview": str(value)[:100] + "..." if value is not None and len(str(value)) > 100 else str(value)
+                }
+            
+            return {
+                "type": "cache_debug",
+                "id": id,
+                "cache_status": cache_status,
+                "total_fields": len([f for f in cache_status.values() if f["exists"]])
+            }
+
+        @self.app.get("/api/v0/get_function")
+        async def get_function(
+            question: str,
+            user=Depends(self.get_current_user)
+        ):
+            """Get a function from a question."""
+            if not question:
+                raise HTTPException(status_code=400, detail="No question provided")
+
+            if not hasattr(self.vn, "get_function"):
+                return {"type": "error", "error": "This setup does not support function generation."}
+
+            cache_id = await self.cache.generate_id(question=question)
+            function = await asyncio.get_event_loop().run_in_executor(
+                None, self.vn.get_function, question
+            )
+
+            if function is None:
+                return {"type": "error", "error": "No function found"}
+
+            if 'instantiated_sql' not in function:
+                self.vn.log(f"No instantiated SQL found for {question} in {function}")
+                return {"type": "error", "error": "No instantiated SQL found"}
+
+            await self.cache.set(id=cache_id, field="question", value=question)
+            await self.cache.set(id=cache_id, field="sql", value=function['instantiated_sql'])
+
+            if 'instantiated_post_processing_code' in function and function['instantiated_post_processing_code'] is not None and len(function['instantiated_post_processing_code']) > 0:
+                await self.cache.set(id=cache_id, field="plotly_code", value=function['instantiated_post_processing_code'])
+
+            return {
+                "type": "function",
+                "id": cache_id,
+                "function": function,
+            }
+
+        @self.app.get("/api/v0/get_function_with_execution")
+        async def get_function_with_execution(
+            question: str,
+            user=Depends(self.get_current_user)
+        ):
+            """Get a function from a question and execute its SQL with retry logic."""
+            if not question:
+                raise HTTPException(status_code=400, detail="No question provided")
+
+            if not hasattr(self.vn, "get_function"):
+                return {"type": "error", "error": "This setup does not support function generation."}
+
+            # Check if database connection is set
+            if not self.vn.run_sql_is_set:
+                return {"type": "error", "error": "Please connect to a database using vn.connect_to_... in order to run SQL queries."}
+
+            cache_id = await self.cache.generate_id(question=question)
+            function = await asyncio.get_event_loop().run_in_executor(
+                None, self.vn.get_function, question
+            )
+
+            if function is None:
+                return {"type": "error", "error": "No function found"}
+
+            if 'instantiated_sql' not in function:
+                self.vn.log(f"No instantiated SQL found for {question} in {function}")
+                return {"type": "error", "error": "No instantiated SQL found"}
+
+            # Cache function data
+            await self.cache.set(id=cache_id, field="question", value=question)
+            await self.cache.set(id=cache_id, field="sql", value=function['instantiated_sql'])
+
+            if 'instantiated_post_processing_code' in function and function['instantiated_post_processing_code'] is not None and len(function['instantiated_post_processing_code']) > 0:
+                await self.cache.set(id=cache_id, field="plotly_code", value=function['instantiated_post_processing_code'])
+
+            # Execute the SQL with retry logic
+            self.vn.log(f"🏁 Starting function SQL execution with retry for: {question}", "Function Execution")
+            self.vn.log(f"📄 Function SQL to execute: {function['instantiated_sql']}", "Function Execution")
+            
+            try:
+                # Use the same retry logic as normal SQL execution
+                df, final_sql, error_history = await self._run_sql_with_retry(cache_id, function['instantiated_sql'])
+                
+                if df is not None:
+                    # Success - return function data with results
+                    self.vn.log(f"🎉 Function SQL executed successfully!", "Function Execution")
+                    
+                    await self.cache.set(id=cache_id, field="df", value=df)
+                    await self.cache.set(id=cache_id, field="sql", value=final_sql)  # Store corrected SQL
+                    
+                    # Store error history for debugging
+                    if error_history:
+                        await self.cache.set(id=cache_id, field="error_history", value=error_history)
+                    
+                    # Check if chart should be generated
+                    should_generate_chart = self.chart and await asyncio.get_event_loop().run_in_executor(
+                        None, self.vn.should_generate_chart, df
+                    )
+
+                    return {
+                        "type": "function_with_results",
+                        "id": cache_id,
+                        "function": function,
+                        "df": df.head(10).to_json(orient='records', date_format='iso'),
+                        "should_generate_chart": should_generate_chart,
+                        "sql_corrected": final_sql != function['instantiated_sql'],
+                        "correction_attempts": len(error_history) if error_history else 0
+                    }
+                else:
+                    # Failed after retries - return conversation questions 
+                    self.vn.log(f"💔 Function SQL execution failed after all retry attempts", "Function Execution")
+                    
+                    return {
+                        "type": "function_conversation_needed",
+                        "id": cache_id,
+                        "function": function,
+                        "message": f"I'm having trouble executing the SQL for '{question}'. Could you provide more context or clarify what specific information you're looking for? This will help me generate the correct query.",
+                        "conversation_questions": [],  # Remove confusing auto-generated questions
+                        "error_history": error_history,
+                        "max_retries_reached": True,
+                        "original_question": question
+                    }
+                    
+            except Exception as e:
+                return {"type": "error", "error": f"Unexpected error executing function SQL: {str(e)}"}
+
+        @self.app.get("/api/v0/get_all_functions")
+        async def get_all_functions(user=Depends(self.get_current_user)):
+            """Get all the functions."""
+            if not hasattr(self.vn, "get_all_functions"):
+                return {"type": "error", "error": "This setup does not support function generation."}
+
+            functions = await asyncio.get_event_loop().run_in_executor(
+                None, self.vn.get_all_functions
+            )
+
+            return {
+                "type": "functions",
+                "functions": functions,
+            }
+
+        @self.app.get("/api/v0/create_function")
+        async def create_function(
+            id: str,
+            user=Depends(self.get_current_user)
+        ):
+            """Create function from cached question and SQL."""
+            # Get required data from cache
+            question = await self.cache.get(id=id, field="question")
+            sql = await self.cache.get(id=id, field="sql")
+            
+            if question is None:
+                raise HTTPException(status_code=400, detail="No question found for this ID")
+            if sql is None:
+                raise HTTPException(status_code=400, detail="No SQL found for this ID")
+
+            plotly_code = await self.cache.get(id=id, field="plotly_code")
+            if plotly_code is None:
+                plotly_code = ""
+
+            function_data = await asyncio.get_event_loop().run_in_executor(
+                None, self.vn.create_function, question, sql, plotly_code
+            )
+
+            return {
+                "type": "function_template",
+                "id": id,
+                "function_template": function_data,
+            }
+
+        @self.app.post("/api/v0/update_function")
+        async def update_function(
+            update_request: FunctionUpdateRequest,
+            user=Depends(self.get_current_user)
+        ):
+            """Update function."""
+            updated = await asyncio.get_event_loop().run_in_executor(
+                None, self.vn.update_function, update_request.old_function_name, update_request.updated_function
+            )
+
+            return {"success": updated}
+
+        @self.app.post("/api/v0/delete_function")
+        async def delete_function(
+            delete_request: DeleteFunctionRequest,
+            user=Depends(self.get_current_user)
+        ):
+            """Delete function."""
+            success = await asyncio.get_event_loop().run_in_executor(
+                None, self.vn.delete_function, delete_request.function_name
+            )
+
+            return {"success": success}
 
     def run(self, host: str = "0.0.0.0", port: int = 8000, **kwargs):
         """Run the FastAPI app."""

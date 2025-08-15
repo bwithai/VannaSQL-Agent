@@ -44,7 +44,7 @@ def main():
         print(f"📁 Using RAG-Layer directory: {os.path.abspath(rag_layer_dir)}")
         
         # Create FastAPI app with async support
-        app = VannaFastAPIApp(vn, allow_llm_to_see_data=True)
+        app = VannaFastAPIApp(vn, allow_llm_to_see_data=True, function_generation=False)
         
         print("🌐 Starting VannaSQL-Agent FastAPI Web Interface...")
         print("📱 Open your browser and go to: http://localhost:8000")
