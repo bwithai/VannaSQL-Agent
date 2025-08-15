@@ -531,9 +531,23 @@ class VannaFastAPI:
                 raise HTTPException(status_code=400, detail="No SQL found for this ID")
 
             try:
-                if chart_instructions is None or len(chart_instructions) == 0:
+                if chart_instructions is None or len(chart_instructions.strip()) == 0:
+                    # No instructions - try to get from cache
                     code = await self.cache.get(id=id, field="plotly_code")
+                    if code is None:
+                        # Generate default chart if no cache exists
+                        self.vn.log(f"🎨 Generating default chart for query {id}", "Chart Generation")
+                        code = await asyncio.get_event_loop().run_in_executor(
+                            None,
+                            self.vn.generate_plotly_code,
+                            question,
+                            sql,
+                            f"Running df.dtypes gives:\n {df.dtypes}"
+                        )
+                        await self.cache.set(id=id, field="plotly_code", value=code)
                 else:
+                    # Chart instructions provided - always regenerate
+                    self.vn.log(f"🎨 Regenerating chart with custom instructions: {chart_instructions[:50]}...", "Chart Generation")
                     enhanced_question = f"{question}. When generating the chart, use these special instructions: {chart_instructions}"
                     code = await asyncio.get_event_loop().run_in_executor(
                         None,
@@ -542,8 +556,12 @@ class VannaFastAPI:
                         sql,
                         f"Running df.dtypes gives:\n {df.dtypes}"
                     )
+                    # Store the custom chart code (this will overwrite default)
                     await self.cache.set(id=id, field="plotly_code", value=code)
+                    # Also store the instructions used for debugging
+                    await self.cache.set(id=id, field="chart_instructions", value=chart_instructions)
 
+                self.vn.log(f"📊 Generating figure from code: {code[:100]}...", "Chart Generation")
                 fig = await asyncio.get_event_loop().run_in_executor(
                     None, self.vn.get_plotly_figure, code, df, False
                 )
@@ -555,8 +573,10 @@ class VannaFastAPI:
                     "type": "plotly_figure",
                     "id": id,
                     "fig": fig_json,
+                    "chart_instructions_applied": chart_instructions is not None and len(chart_instructions.strip()) > 0
                 }
             except Exception as e:
+                self.vn.log(f"❌ Chart generation failed: {str(e)}", "Chart Generation")
                 return {"type": "error", "error": str(e)}
 
         @self.app.get("/api/v0/generate_rewritten_question")
