@@ -106,146 +106,7 @@ class VannaFastAPI:
         # Register routes
         self._register_routes()
 
-    async def _run_sql_with_retry(self, cache_id: str, original_sql: str, max_retries: int = 2):
-        """
-        Run SQL with automatic retry and error correction using LLM.
-        
-        Args:
-            cache_id: Cache ID for storing intermediate results
-            original_sql: The initial SQL to execute
-            max_retries: Maximum number of retry attempts (default: 2)
-            
-        Returns:
-            Tuple of (dataframe, final_sql, error_history)
-            - dataframe: pandas DataFrame if successful, None if failed
-            - final_sql: The final SQL that worked (might be corrected)
-            - error_history: List of error attempts and corrections
-        """
-        current_sql = original_sql
-        error_history = []
-        
-        # Log the start of SQL execution with retry capability
-        self.vn.log(f"🔄 Starting SQL execution with auto-retry for query {cache_id}", "SQL Auto-Retry")
-        self.vn.log(f"📝 Original SQL: {original_sql}", "SQL Auto-Retry")
-        self.vn.log(f"⚙️ Max retries configured: {max_retries}", "SQL Auto-Retry")
-        
-        for attempt in range(max_retries + 1):  # +1 for original attempt
-            # Log each attempt
-            self.vn.log(f"🚀 Attempt {attempt + 1}/{max_retries + 1}: Executing SQL", "SQL Auto-Retry")
-            if attempt > 0:
-                self.vn.log(f"🔧 Using corrected SQL: {current_sql}", "SQL Auto-Retry")
-            
-            try:
-                # Try to execute the SQL
-                df = await asyncio.get_event_loop().run_in_executor(
-                    None, self.vn.run_sql, current_sql
-                )
-                
-                # Success! Log the result
-                if attempt == 0:
-                    self.vn.log(f"✅ SQL executed successfully on first attempt!", "SQL Auto-Retry")
-                else:
-                    self.vn.log(f"✅ SQL executed successfully after {attempt} correction(s)!", "SQL Auto-Retry")
-                self.vn.log(f"📊 Query returned {len(df)} rows", "SQL Auto-Retry")
-                
-                return df, current_sql, error_history
-                
-            except Exception as db_error:
-                error_message = str(db_error)
-                
-                # Log the database error
-                self.vn.log(f"❌ Attempt {attempt + 1} failed with database error: {error_message}", "SQL Auto-Retry")
-                
-                # Store this error attempt
-                error_attempt = {
-                    "attempt": attempt + 1,
-                    "sql": current_sql,
-                    "database_error": error_message,
-                    "timestamp": asyncio.get_event_loop().time()
-                }
-                
-                # If this is the last attempt, add the error and break
-                if attempt >= max_retries:
-                    self.vn.log(f"🛑 Max retries ({max_retries}) reached. No more attempts will be made.", "SQL Auto-Retry")
-                    error_history.append(error_attempt)
-                    break
-                
-                # Ask LLM to fix the SQL based on the database error
-                self.vn.log(f"🤖 Asking LLM to generate corrected SQL for attempt {attempt + 2}...", "SQL Auto-Retry")
-                
-                try:
-                    # Get original question from cache
-                    original_question = await self.cache.get(id=cache_id, field="question")
-                    
-                    self.vn.log(f"📋 Original question: {original_question}", "SQL Auto-Retry")
-                    self.vn.log(f"🔍 Sending error to LLM: {error_message[:100]}...", "SQL Auto-Retry")
-                    
-                    # Generate corrected SQL
-                    corrected_sql = await self._ask_llm_to_fix_sql(
-                        original_question or "Query execution",
-                        current_sql, 
-                        error_message,
-                        attempt + 1
-                    )
-                    
-                    error_attempt["corrected_sql"] = corrected_sql
-                    error_history.append(error_attempt)
-                    
-                    # Log the LLM correction
-                    self.vn.log(f"✨ LLM generated corrected SQL: {corrected_sql}", "SQL Auto-Retry")
-                    
-                    # Use the corrected SQL for next attempt
-                    current_sql = corrected_sql
-                    
-                    # Store intermediate correction in cache
-                    await self.cache.set(
-                        id=cache_id, 
-                        field=f"sql_attempt_{attempt + 2}", 
-                        value=corrected_sql
-                    )
-                    
-                    self.vn.log(f"💾 Cached corrected SQL for next attempt", "SQL Auto-Retry")
-                    
-                except Exception as llm_error:
-                    # LLM failed to generate correction
-                    self.vn.log(f"🚫 LLM failed to generate correction: {str(llm_error)}", "SQL Auto-Retry")
-                    error_attempt["llm_error"] = str(llm_error)
-                    error_attempt["user_explanation"] = (
-                        f"Database error: {error_message}. "
-                        f"Unable to auto-correct SQL due to LLM error: {str(llm_error)}"
-                    )
-                    error_history.append(error_attempt)
-                    break
-        
-        # All attempts failed
-        self.vn.log(f"💥 All {max_retries + 1} attempts failed. Returning error to user.", "SQL Auto-Retry")
-        return None, current_sql, error_history
 
-    async def _ask_llm_to_fix_sql(self, question: str, failed_sql: str, error_message: str, attempt: int) -> str:
-        """
-        Ask the LLM to fix SQL based on database error.
-        """
-        self.vn.log(f"🛠️ Building correction prompt for attempt #{attempt}", "SQL Auto-Retry")
-        
-        fix_prompt = (
-            f"The following SQL query failed with a database error:\n\n"
-            f"Original Question: {question}\n\n"
-            f"Failed SQL:\n```sql\n{failed_sql}\n```\n\n"
-            f"Database Error: {error_message}\n\n"
-            f"This is correction attempt #{attempt}. Please provide a corrected SQL query that fixes this specific error. "
-            f"Respond with only the corrected SQL query, no explanations."
-        )
-        
-        self.vn.log(f"📤 Sending correction request to LLM (phi4-mini)", "SQL Auto-Retry")
-        
-        # Generate corrected SQL using LLM
-        corrected_sql = await asyncio.get_event_loop().run_in_executor(
-            None, self.vn.generate_sql, fix_prompt, False  # Don't allow LLM to see data for error correction
-        )
-        
-        self.vn.log(f"📥 LLM returned corrected SQL: {corrected_sql[:100]}{'...' if len(corrected_sql) > 100 else ''}", "SQL Auto-Retry")
-        
-        return corrected_sql
 
 
 
@@ -396,8 +257,11 @@ class VannaFastAPI:
                 self.vn.log(f"🏁 Starting SQL execution for query ID: {id}", "SQL Execution")
                 self.vn.log(f"📄 SQL to execute: {sql}", "SQL Execution")
                 
-                # Try to run SQL with auto-retry on error
-                df, final_sql, error_history = await self._run_sql_with_retry(id, sql)
+                # Try to run SQL with auto-retry on error using shared base method
+                original_question = await self.cache.get(id=id, field="question") or "Query execution"
+                df, final_sql, error_history = await asyncio.get_event_loop().run_in_executor(
+                    None, self.vn.run_sql_with_retry, sql, 2, original_question
+                )
                 
                 if df is not None:
                     # Success - log and store results

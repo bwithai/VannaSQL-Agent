@@ -43,7 +43,7 @@ class VannaFastAPIApp(VannaFastAPI):
         ask_results_correct: bool = True,
         followup_questions: bool = True,
         summarization: bool = True,
-        function_generation: bool = True,
+        function_generation: bool = False,
         index_html_path: Optional[str] = None,
         assets_folder: Optional[str] = None,
     ):

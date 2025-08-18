@@ -144,22 +144,40 @@ class VannaBase(ABC):
                 intermediate_sql = self.extract_sql(llm_response)
 
                 try:
-                    self.log(title="Running Intermediate SQL", message=intermediate_sql)
-                    df = self.run_sql(intermediate_sql)
-
-                    prompt = self.get_sql_prompt(
-                        initial_prompt=initial_prompt,
-                        question=question,
-                        question_sql_list=question_sql_list,
-                        ddl_list=ddl_list,
-                        doc_list=doc_list+[f"The following is a pandas DataFrame with the results of the intermediate SQL query {intermediate_sql}: \n" + df.to_markdown()],
-                        **kwargs,
+                    self.log(title="Running Intermediate SQL with Auto-Retry", message=intermediate_sql)
+                    # Use auto-retry logic for intermediate SQL execution
+                    df, final_intermediate_sql, error_history = self.run_sql_with_retry(
+                        intermediate_sql, 
+                        max_retries=2, 
+                        context_info=f"Intermediate SQL for question: {question}"
                     )
-                    self.log(title="Final SQL Prompt", message=prompt)
-                    llm_response = self.submit_prompt(prompt, **kwargs)
-                    self.log(title="LLM Response", message=llm_response)
+                    
+                    if df is not None:
+                        # Success - use the results for final SQL generation
+                        if final_intermediate_sql != intermediate_sql:
+                            self.log(title="Intermediate SQL Auto-Corrected", message=f"Original: {intermediate_sql}\nCorrected: {final_intermediate_sql}")
+                        
+                        prompt = self.get_sql_prompt(
+                            initial_prompt=initial_prompt,
+                            question=question,
+                            question_sql_list=question_sql_list,
+                            ddl_list=ddl_list,
+                            doc_list=doc_list+[f"The following is a pandas DataFrame with the results of the intermediate SQL query {final_intermediate_sql}: \n" + df.to_markdown()],
+                            **kwargs,
+                        )
+                        self.log(title="Final SQL Prompt", message=prompt)
+                        llm_response = self.submit_prompt(prompt, **kwargs)
+                        self.log(title="LLM Response", message=llm_response)
+                    else:
+                        # Failed after retries - return detailed error information
+                        error_details = []
+                        for error in error_history:
+                            error_details.append(f"Attempt {error['attempt']}: {error['database_error']}")
+                        
+                        return f"Error running intermediate SQL after {len(error_history)} attempts:\n" + "\n".join(error_details)
+                        
                 except Exception as e:
-                    return f"Error running intermediate SQL: {e}"
+                    return f"Unexpected error running intermediate SQL: {e}"
 
 
         return self.extract_sql(llm_response)
@@ -1660,6 +1678,139 @@ class VannaBase(ABC):
 
       self.run_sql_is_set = True
       self.run_sql = run_sql_hive
+
+    def run_sql_with_retry(self, sql: str, max_retries: int = 2, context_info: str = None) -> tuple:
+        """
+        Run SQL with automatic retry and error correction using LLM.
+        
+        Args:
+            sql (str): The SQL query to execute
+            max_retries (int): Maximum number of retry attempts (default: 2)
+            context_info (str): Additional context for error correction (e.g., original question)
+            
+        Returns:
+            tuple: (dataframe, final_sql, error_history)
+            - dataframe: pandas DataFrame if successful, None if failed
+            - final_sql: The final SQL that worked (might be corrected)
+            - error_history: List of error attempts and corrections
+        """
+        current_sql = sql
+        error_history = []
+        
+        # Log the start of SQL execution with retry capability
+        self.log(f"🔄 Starting SQL execution with auto-retry", "SQL Auto-Retry")
+        self.log(f"📝 Original SQL: {sql}", "SQL Auto-Retry")
+        self.log(f"⚙️ Max retries configured: {max_retries}", "SQL Auto-Retry")
+        
+        for attempt in range(max_retries + 1):  # +1 for original attempt
+            # Log each attempt
+            self.log(f"🚀 Attempt {attempt + 1}/{max_retries + 1}: Executing SQL", "SQL Auto-Retry")
+            if attempt > 0:
+                self.log(f"🔧 Using corrected SQL: {current_sql}", "SQL Auto-Retry")
+            
+            try:
+                # Try to execute the SQL
+                df = self.run_sql(current_sql)
+                
+                # Success! Log the result
+                if attempt == 0:
+                    self.log(f"✅ SQL executed successfully on first attempt!", "SQL Auto-Retry")
+                else:
+                    self.log(f"✅ SQL executed successfully after {attempt} correction(s)!", "SQL Auto-Retry")
+                self.log(f"📊 Query returned {len(df)} rows", "SQL Auto-Retry")
+                
+                return df, current_sql, error_history
+                
+            except Exception as db_error:
+                error_message = str(db_error)
+                
+                # Log the database error
+                self.log(f"❌ Attempt {attempt + 1} failed with database error: {error_message}", "SQL Auto-Retry")
+                
+                # Store this error attempt
+                error_attempt = {
+                    "attempt": attempt + 1,
+                    "sql": current_sql,
+                    "database_error": error_message,
+                    "timestamp": pd.Timestamp.now().timestamp()
+                }
+                
+                # If this is the last attempt, add the error and break
+                if attempt >= max_retries:
+                    self.log(f"🛑 Max retries ({max_retries}) reached. No more attempts will be made.", "SQL Auto-Retry")
+                    error_history.append(error_attempt)
+                    break
+                
+                # Ask LLM to fix the SQL based on the database error
+                self.log(f"🤖 Asking LLM to generate corrected SQL for attempt {attempt + 2}...", "SQL Auto-Retry")
+                
+                try:
+                    self.log(f"🔍 Sending error to LLM: {error_message[:100]}...", "SQL Auto-Retry")
+                    
+                    # Generate corrected SQL
+                    corrected_sql = self._ask_llm_to_fix_sql(
+                        context_info or "Query execution",
+                        current_sql, 
+                        error_message,
+                        attempt + 1
+                    )
+                    
+                    error_attempt["corrected_sql"] = corrected_sql
+                    error_history.append(error_attempt)
+                    
+                    # Log the LLM correction
+                    self.log(f"✨ LLM generated corrected SQL: {corrected_sql}", "SQL Auto-Retry")
+                    
+                    # Use the corrected SQL for next attempt
+                    current_sql = corrected_sql
+                    
+                except Exception as llm_error:
+                    # LLM failed to generate correction
+                    self.log(f"🚫 LLM failed to generate correction: {str(llm_error)}", "SQL Auto-Retry")
+                    error_attempt["llm_error"] = str(llm_error)
+                    error_attempt["user_explanation"] = (
+                        f"Database error: {error_message}. "
+                        f"Unable to auto-correct SQL due to LLM error: {str(llm_error)}"
+                    )
+                    error_history.append(error_attempt)
+                    break
+        
+        # All attempts failed
+        self.log(f"💥 All {max_retries + 1} attempts failed. Returning error to user.", "SQL Auto-Retry")
+        return None, current_sql, error_history
+
+    def _ask_llm_to_fix_sql(self, context_info: str, failed_sql: str, error_message: str, attempt: int) -> str:
+        """
+        Ask the LLM to fix SQL based on database error.
+        
+        Args:
+            context_info (str): Context information (e.g., original question)
+            failed_sql (str): The SQL that failed
+            error_message (str): The database error message
+            attempt (int): Current attempt number
+            
+        Returns:
+            str: Corrected SQL query
+        """
+        self.log(f"🛠️ Building correction prompt for attempt #{attempt}", "SQL Auto-Retry")
+        
+        fix_prompt = (
+            f"The following SQL query failed with a database error:\n\n"
+            f"Context: {context_info}\n\n"
+            f"Failed SQL:\n```sql\n{failed_sql}\n```\n\n"
+            f"Database Error: {error_message}\n\n"
+            f"This is correction attempt #{attempt}. Please provide a corrected SQL query that fixes this specific error. "
+            f"Respond with only the corrected SQL query, no explanations."
+        )
+        
+        self.log(f"📤 Sending correction request to LLM", "SQL Auto-Retry")
+        
+        # Generate corrected SQL using LLM
+        corrected_sql = self.generate_sql(fix_prompt, allow_llm_to_see_data=False)
+        
+        self.log(f"📥 LLM returned corrected SQL: {corrected_sql[:100]}{'...' if len(corrected_sql) > 100 else ''}", "SQL Auto-Retry")
+        
+        return corrected_sql
 
     def run_sql(self, sql: str, **kwargs) -> pd.DataFrame:
         """
