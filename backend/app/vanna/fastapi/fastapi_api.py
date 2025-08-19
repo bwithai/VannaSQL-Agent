@@ -213,16 +213,36 @@ class VannaFastAPI:
 
             cache_id = await self.cache.generate_id(question=question)
             
-            # Generate SQL asynchronously
-            sql = await asyncio.get_event_loop().run_in_executor(
-                None, 
-                self.vn.generate_sql, 
-                question, 
-                self.allow_llm_to_see_data
-            )
+            # Check if we have cached SQL first
+            was_cached = False
+            if hasattr(self.vn, 'get_exact_question_sql'):
+                cached_sql = await asyncio.get_event_loop().run_in_executor(
+                    None, self.vn.get_exact_question_sql, question
+                )
+                if cached_sql:
+                    sql = cached_sql
+                    was_cached = True
+                    self.vn.log(f"🎯 Using cached SQL for question: {question[:50]}...", "RAG Cache")
+                else:
+                    # Generate SQL asynchronously
+                    sql = await asyncio.get_event_loop().run_in_executor(
+                        None, 
+                        self.vn._generate_sql_bypass_cache, 
+                        question, 
+                        self.allow_llm_to_see_data
+                    )
+            else:
+                # Fallback to normal generation if exact matching not available
+                sql = await asyncio.get_event_loop().run_in_executor(
+                    None, 
+                    self.vn.generate_sql, 
+                    question, 
+                    self.allow_llm_to_see_data
+                )
 
             await self.cache.set(id=cache_id, field="question", value=question)
             await self.cache.set(id=cache_id, field="sql", value=sql)
+            await self.cache.set(id=cache_id, field="was_cached", value=was_cached)
 
             # Check if SQL is valid
             is_valid = await asyncio.get_event_loop().run_in_executor(
@@ -233,6 +253,7 @@ class VannaFastAPI:
                 "type": "sql" if is_valid else "text",
                 "id": cache_id,
                 "text": sql,
+                "from_cache": was_cached,  # Indicate if SQL came from cache
             }
 
         @self.app.get("/api/v0/run_sql")
@@ -255,10 +276,13 @@ class VannaFastAPI:
             try:
                 # Log the start of SQL execution
                 self.vn.log(f"🏁 Starting SQL execution for query ID: {id}", "SQL Execution")
-                self.vn.log(f"📄 SQL to execute: {sql}", "SQL Execution")
+                self.vn.log(f"📄 SQL to execute with auto-retry: {sql}", "SQL Execution")
+                
+                # Check if this SQL came from cache
+                original_question = await self.cache.get(id=id, field="question") or "Query execution"
+                was_cached = await self.cache.get(id=id, field="was_cached") or False
                 
                 # Try to run SQL with auto-retry on error using shared base method
-                original_question = await self.cache.get(id=id, field="question") or "Query execution"
                 df, final_sql, error_history = await asyncio.get_event_loop().run_in_executor(
                     None, self.vn.run_sql_with_retry, sql, 2, original_question
                 )
@@ -291,6 +315,49 @@ class VannaFastAPI:
                         "correction_attempts": len(error_history) if error_history else 0
                     }
                 else:
+                    # Failed after retries - if this was cached SQL, try regenerating
+                    if was_cached:
+                        self.vn.log(f"🔄 Cached SQL failed, regenerating for question: {original_question}", "SQL Fallback")
+                        
+                        # Force regenerate SQL by bypassing cache
+                        new_sql = await asyncio.get_event_loop().run_in_executor(
+                            None, 
+                            self.vn._generate_sql_bypass_cache,
+                            original_question,
+                            self.allow_llm_to_see_data
+                        )
+                        
+                        # Update cache with new SQL
+                        await self.cache.set(id=id, field="sql", value=new_sql)
+                        await self.cache.set(id=id, field="was_cached", value=False)
+                        
+                        self.vn.log(f"🔄 Regenerated SQL, retrying execution...", "SQL Fallback")
+                        
+                        # Try executing the new SQL
+                        df, final_sql, error_history = await asyncio.get_event_loop().run_in_executor(
+                            None, self.vn.run_sql_with_retry, new_sql, 2, original_question
+                        )
+                        
+                        if df is not None:
+                            # Success with regenerated SQL
+                            self.vn.log(f"🎉 Regenerated SQL executed successfully!", "SQL Fallback")
+                            
+                            await self.cache.set(id=id, field="df", value=df)
+                            await self.cache.set(id=id, field="sql", value=final_sql)
+                            
+                            should_generate_chart = self.chart and await asyncio.get_event_loop().run_in_executor(
+                                None, self.vn.should_generate_chart, df
+                            )
+
+                            return {
+                                "type": "df",
+                                "id": id,
+                                "df": df.head(10).to_json(orient='records', date_format='iso'),
+                                "should_generate_chart": should_generate_chart,
+                                "sql_corrected": final_sql != new_sql,
+                                "correction_attempts": len(error_history) if error_history else 0,
+                                "sql_regenerated": True  # Indicate SQL was regenerated due to cache failure
+                            }
                     # Failed after retries - return conversation questions to gather more context
                     self.vn.log(f"💔 SQL execution failed after all retry attempts", "SQL Execution")
                     self.vn.log(f"📊 Total error attempts: {len(error_history)}", "SQL Execution")

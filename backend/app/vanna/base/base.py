@@ -97,7 +97,13 @@ class VannaBase(ABC):
         vn.generate_sql("What are the top 10 customers by sales?")
         ```
 
-        Uses the LLM to generate a SQL query that answers a question. It runs the following methods:
+        Uses the LLM to generate a SQL query that answers a question. First checks the RAG layer
+        for an exact match of the question. If found, returns the cached SQL. If not found or 
+        the cached SQL fails, generates new SQL using the LLM.
+
+        It runs the following methods:
+
+        - [`get_exact_question_sql`][vanna.base.base.VannaBase.get_exact_question_sql] (if available)
 
         - [`get_similar_question_sql`][vanna.base.base.VannaBase.get_similar_question_sql]
 
@@ -116,6 +122,23 @@ class VannaBase(ABC):
 
         Returns:
             str: The SQL query that answers the question.
+        """
+        # First, check if we have an exact match in the RAG layer
+        if hasattr(self, 'get_exact_question_sql'):
+            cached_sql = self.get_exact_question_sql(question, **kwargs)
+            if cached_sql:
+                self.log(f"🚀 Using cached SQL from RAG layer for question: {question[:50]}...", "RAG Cache")
+                return cached_sql
+        
+        # If no exact match found, generate new SQL using LLM
+        self.log(f"🔄 No cached SQL found, generating new SQL for question: {question[:50]}...", "SQL Generation")
+        
+        return self._generate_sql_bypass_cache(question, allow_llm_to_see_data, **kwargs)
+    
+    def _generate_sql_bypass_cache(self, question: str, allow_llm_to_see_data=False, **kwargs) -> str:
+        """
+        Generate SQL using LLM, bypassing any cache checks.
+        Used for fallback when cached SQL fails.
         """
         if self.config is not None:
             initial_prompt = self.config.get("initial_prompt", None)
@@ -149,7 +172,7 @@ class VannaBase(ABC):
                     df, final_intermediate_sql, error_history = self.run_sql_with_retry(
                         intermediate_sql, 
                         max_retries=2, 
-                        context_info=f"Intermediate SQL for question: {question}"
+                        context_info=question
                     )
                     
                     if df is not None:
@@ -174,7 +197,7 @@ class VannaBase(ABC):
                         for error in error_history:
                             error_details.append(f"Attempt {error['attempt']}: {error['database_error']}")
                         
-                        return f"Error running intermediate SQL after {len(error_history)} attempts:\n" + "\n".join(error_details)
+                        return f"I'm having trouble generating the right SQL for '{question}'. Could you provide more context or clarify what specific information you're looking for? This will help me understand your request better."
                         
                 except Exception as e:
                     return f"Unexpected error running intermediate SQL: {e}"
@@ -618,7 +641,7 @@ class VannaBase(ABC):
         """
 
         if initial_prompt is None:
-            initial_prompt = f"You are a {self.dialect} expert. " + \
+            initial_prompt = f"You are a My{self.dialect} 8 expert. " + \
             "Please help to generate a SQL query to answer the question. Your response should ONLY be based on the given context and follow the response guidelines and format instructions. "
 
         initial_prompt = self.add_ddl_to_prompt(
@@ -639,7 +662,7 @@ class VannaBase(ABC):
             "3. If the provided context is insufficient, please explain why it can't be generated. \n"
             "4. Please use the most relevant table(s). \n"
             "5. If the question has been asked and answered before, please repeat the answer exactly as it was given before. \n"
-            f"6. Ensure that the output SQL is {self.dialect}-compliant and executable, and free of syntax errors. \n"
+            f"6. Ensure that the output SQL is My{self.dialect}8-compliant and executable, and free of syntax errors. \n"
         )
 
         message_log = [self.system_message(initial_prompt)]
@@ -1779,7 +1802,7 @@ class VannaBase(ABC):
         self.log(f"💥 All {max_retries + 1} attempts failed. Returning error to user.", "SQL Auto-Retry")
         return None, current_sql, error_history
 
-    def _ask_llm_to_fix_sql(self, context_info: str, failed_sql: str, error_message: str, attempt: int) -> str:
+    def _ask_llm_to_fix_sql(self, context_info: str, failed_sql: str, error_message: str, attempt: int, **kwargs) -> str:
         """
         Ask the LLM to fix SQL based on database error.
         
@@ -1793,20 +1816,50 @@ class VannaBase(ABC):
             str: Corrected SQL query
         """
         self.log(f"🛠️ Building correction prompt for attempt #{attempt}", "SQL Auto-Retry")
-        
-        fix_prompt = (
-            f"The following SQL query failed with a database error:\n\n"
-            f"Context: {context_info}\n\n"
-            f"Failed SQL:\n```sql\n{failed_sql}\n```\n\n"
-            f"Database Error: {error_message}\n\n"
-            f"This is correction attempt #{attempt}. Please provide a corrected SQL query that fixes this specific error. "
-            f"Respond with only the corrected SQL query, no explanations."
+
+        question_sql_list = self.get_similar_question_sql(context_info, **kwargs)
+        ddl_list = self.get_related_ddl(context_info, **kwargs)
+        doc_list = self.get_related_documentation(context_info, **kwargs)
+
+        initial_prompt = f"You are a My{self.dialect} expert. You are given a question and a database error. You need to generate a corrected SQL query that fixes the error."
+        initial_prompt = self.add_ddl_to_prompt(
+            initial_prompt, ddl_list, max_tokens=self.max_tokens
         )
-        
-        self.log(f"📤 Sending correction request to LLM", "SQL Auto-Retry")
+        if self.static_documentation != "":
+            doc_list.append(self.static_documentation)
+
+        initial_prompt = self.add_documentation_to_prompt(
+            initial_prompt, doc_list, max_tokens=self.max_tokens
+        )
+
+        initial_prompt += (
+            "===Response Guidelines \n"
+            "1. If the provided context is sufficient, please generate a valid SQL query without any explanations for the question. \n"
+            "2. If the provided context is almost sufficient but requires knowledge of a specific string in a particular column, please generate an intermediate SQL query to find the distinct strings in that column. Prepend the query with a comment saying intermediate_sql \n"
+            "3. If the provided context is insufficient, please explain why it can't be generated. \n"
+            "4. Please use the most relevant table(s). \n"
+            "5. If the question has been asked and answered before, please repeat the answer exactly as it was given before. \n"
+            f"6. Ensure that the output SQL is My{self.dialect}-compliant and executable, and free of syntax errors. \n"
+        )
+
+        message_log = [self.system_message(initial_prompt)]
+
+        for example in question_sql_list:
+            if example is None:
+                print("example is None")
+            else:
+                if example is not None and "question" in example and "sql" in example:
+                    message_log.append(self.user_message(example["question"]))
+                    message_log.append(self.assistant_message(example["sql"]))
+
+        message_log.append(self.user_message(f"MySQL query: {self.extract_sql(failed_sql)} give error: {error_message}"))
+
+        self.log(title="SQL Auto-Retry Prompt", message=message_log)
+        llm_response = self.submit_prompt(message_log)
+        self.log(title="LLM Auto-Retry Response", message=llm_response)
         
         # Generate corrected SQL using LLM
-        corrected_sql = self.generate_sql(fix_prompt, allow_llm_to_see_data=False)
+        corrected_sql = self.extract_sql(llm_response)
         
         self.log(f"📥 LLM returned corrected SQL: {corrected_sql[:100]}{'...' if len(corrected_sql) > 100 else ''}", "SQL Auto-Retry")
         

@@ -232,6 +232,24 @@ class ChromaDB_VectorStore(VannaBase):
 
             return documents
 
+    def get_exact_question_sql(self, question: str, **kwargs) -> str:
+        """
+        Check if the exact question exists in the RAG layer and return the SQL.
+        Returns the SQL if found, None otherwise.
+        """
+        # Get all documents to check for exact match
+        all_data = self.sql_collection.get()
+        if all_data and "documents" in all_data:
+            for doc in all_data["documents"]:
+                try:
+                    doc_data = json.loads(doc)
+                    if doc_data.get("question", "").strip().lower() == question.strip().lower():
+                        self.log(f"🎯 Found exact match for question: {question[:50]}...", "RAG Cache")
+                        return doc_data.get("sql", "")
+                except json.JSONDecodeError:
+                    continue
+        return None
+
     def get_similar_question_sql(self, question: str, **kwargs) -> list:
         return ChromaDB_VectorStore._extract_documents(
             self.sql_collection.query(

@@ -118,10 +118,10 @@ def seed_discipline_data(session) -> None:
     from sqlmodel import select
     
     # Check if data already exists
-    existing = session.exec(select(DisciplineData)).first()
-    if existing:
-        print("DisciplineData already seeded, skipping...")
-        return
+    # existing = session.exec(select(DisciplineData)).first()
+    # if existing:
+    #     print("DisciplineData already seeded, skipping...")
+    #     return
     
     dummy_records = [
         DisciplineData(
@@ -135,7 +135,7 @@ def seed_discipline_data(session) -> None:
             name="John Smith",
             parent_unit="1st Battalion Rajput Regiment",
             initiated_by="HQ Western Command",
-            award="Severe displeasure",
+            award="Warning",
             initiation_year=2020,
             svc_bracket=5,
             awardee_unit="3rd Infantry Division"
@@ -151,59 +151,59 @@ def seed_discipline_data(session) -> None:
             name="Raj Kumar Singh",
             parent_unit="4th Field Artillery Regiment",
             initiated_by="Area HQ Central Command",
-            award="Warning",
-            initiation_year=2023,
+            award="Severe displeasure",
+            initiation_year=2022,
             svc_bracket=5,
             awardee_unit="15th Artillery Brigade"
         ),
-        DisciplineData(
-            doc=date(2016, 8, 20),
-            cat="Negligence of duty",
-            initiation_date=datetime(2021, 11, 5, 9, 15, 0),
-            arm="Armoured Corps",
-            course="ACC-2016-C",
-            svc_no="MJ-54321",
-            rank="Major",
-            name="Vikram Sharma",
-            parent_unit="17th Poona Horse",
-            initiated_by="HQ Southern Command",
-            award="Reprimand",
-            initiation_year=2021,
-            svc_bracket=5,
-            awardee_unit="31st Armoured Division"
-        ),
-        DisciplineData(
-            doc=date(2017, 4, 3),
-            cat="Misconduct",
-            initiation_date=datetime(2022, 1, 18, 16, 45, 0),
-            arm="Engineers",
-            course="MES-2017-D",
-            svc_no="CP-98765",
-            rank="Colonel",
-            name="Amit Patel",
-            parent_unit="2nd Engineer Regiment",
-            initiated_by="HQ Eastern Command",
-            award="Censure",
-            initiation_year=2022,
-            svc_bracket=5,
-            awardee_unit="Corps of Engineers"
-        ),
-        DisciplineData(
-            doc=date(2019, 1, 25),
-            cat="Insubordination",
-            initiation_date=datetime(2024, 2, 10, 11, 20, 0),
-            arm="Signals",
-            course="SIG-2019-E",
-            svc_no="SG-13579",
-            rank="Subedar",
-            name="Ramesh Chandra",
-            parent_unit="7th Signal Regiment",
-            initiated_by="Corps HQ XIV Corps",
-            award="Reduction in rank",
-            initiation_year=2024,
-            svc_bracket=5,
-            awardee_unit="Signal Training Establishment"
-        )
+        # DisciplineData(
+        #     doc=date(2016, 8, 20),
+        #     cat="Negligence of duty",
+        #     initiation_date=datetime(2021, 11, 5, 9, 15, 0),
+        #     arm="Armoured Corps",
+        #     course="ACC-2016-C",
+        #     svc_no="MJ-54321",
+        #     rank="Major",
+        #     name="Vikram Sharma",
+        #     parent_unit="17th Poona Horse",
+        #     initiated_by="HQ Southern Command",
+        #     award="Reprimand",
+        #     initiation_year=2021,
+        #     svc_bracket=5,
+        #     awardee_unit="31st Armoured Division"
+        # ),
+        # DisciplineData(
+        #     doc=date(2017, 4, 3),
+        #     cat="Misconduct",
+        #     initiation_date=datetime(2022, 1, 18, 16, 45, 0),
+        #     arm="Engineers",
+        #     course="MES-2017-D",
+        #     svc_no="CP-98765",
+        #     rank="Colonel",
+        #     name="Amit Patel",
+        #     parent_unit="2nd Engineer Regiment",
+        #     initiated_by="HQ Eastern Command",
+        #     award="Censure",
+        #     initiation_year=2022,
+        #     svc_bracket=5,
+        #     awardee_unit="Corps of Engineers"
+        # ),
+        # DisciplineData(
+        #     doc=date(2019, 1, 25),
+        #     cat="Insubordination",
+        #     initiation_date=datetime(2024, 2, 10, 11, 20, 0),
+        #     arm="Signals",
+        #     course="SIG-2019-E",
+        #     svc_no="SG-13579",
+        #     rank="Subedar",
+        #     name="Ramesh Chandra",
+        #     parent_unit="7th Signal Regiment",
+        #     initiated_by="Corps HQ XIV Corps",
+        #     award="Reduction in rank",
+        #     initiation_year=2024,
+        #     svc_bracket=5,
+        #     awardee_unit="Signal Training Establishment"
+        # )
     ]
     
     session.add_all(dummy_records)
