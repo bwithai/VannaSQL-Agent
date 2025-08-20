@@ -92,12 +92,90 @@ class Ollama(VannaBase):
       f"options={self.ollama_options},\n"
       f"keep_alive={self.keep_alive}")
     self.log(f"Prompt Content:\n{json.dumps(prompt, ensure_ascii=False)}")
+    
+    # Check if streaming is requested
+    stream = kwargs.get('stream', False)
+    think = kwargs.get('think', False)
+    
+    if stream:
+      # Return streaming generator for real-time responses
+      return self._submit_prompt_stream(prompt, think=think)
+    
     response_dict = self.ollama_client.chat(model=self.model,
                                             messages=prompt,
                                             stream=False,
                                             options=self.ollama_options,
-                                            keep_alive=self.keep_alive)
+                                            keep_alive=self.keep_alive,
+                                            think=think if self._supports_thinking() else False)
 
     self.log(f"Ollama Response:\n{str(response_dict)}")
 
     return response_dict['message']['content']
+
+  def _supports_thinking(self) -> bool:
+    """Check if the current model supports thinking mode."""
+    thinking_models = [
+      'qwen3:4b', 'qwen3:8b'
+    ]
+    return any(model in self.model.lower() for model in thinking_models)
+
+  def _submit_prompt_stream(self, prompt, think=False):
+    """Submit prompt with streaming support for real-time thinking."""
+    try:
+      # Only enable thinking for supported models
+      use_thinking = think and self._supports_thinking()
+      
+      stream = self.ollama_client.chat(
+        model=self.model,
+        messages=prompt,
+        stream=True,
+        options=self.ollama_options,
+        keep_alive=self.keep_alive,
+        think=use_thinking
+      )
+      
+      thinking_complete = False
+      full_response = ""
+      
+      for chunk in stream:
+        chunk_data = {
+          'type': 'chunk',
+          'thinking': None,
+          'content': None,
+          'thinking_complete': thinking_complete
+        }
+        
+        # Handle thinking content
+        if (hasattr(chunk, 'message') and hasattr(chunk.message, 'thinking') 
+            and chunk.message.thinking and not thinking_complete):
+          chunk_data['type'] = 'thinking'
+          chunk_data['thinking'] = chunk.message.thinking
+          yield chunk_data
+        
+        # Handle response content
+        if (hasattr(chunk, 'message') and hasattr(chunk.message, 'content') 
+            and chunk.message.content):
+          if not thinking_complete:
+            thinking_complete = True
+            chunk_data['thinking_complete'] = True
+            chunk_data['type'] = 'thinking_end'
+            yield chunk_data
+          
+          chunk_data['type'] = 'content'
+          chunk_data['content'] = chunk.message.content
+          full_response += chunk.message.content
+          yield chunk_data
+      
+      # Send final completion signal
+      yield {
+        'type': 'complete',
+        'full_response': full_response,
+        'thinking_complete': thinking_complete
+      }
+      
+    except Exception as e:
+      self.log(f"Error in streaming: {e}")
+      yield {
+        'type': 'error',
+        'error': str(e)
+      }

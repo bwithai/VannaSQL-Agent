@@ -21,6 +21,10 @@ from .cache import AsyncCache, AsyncMemoryCache
 class QuestionRequest(BaseModel):
     question: str
 
+class StreamingQuestionRequest(BaseModel):
+    question: str
+    enable_thinking: bool = True
+
 
 class SQLUpdateRequest(BaseModel):
     id: str
@@ -255,6 +259,111 @@ class VannaFastAPI:
                 "text": sql,
                 "from_cache": was_cached,  # Indicate if SQL came from cache
             }
+
+        @self.app.post("/api/v0/generate_sql_stream")
+        async def generate_sql_stream(
+            request: StreamingQuestionRequest,
+            user=Depends(self.get_current_user)
+        ):
+            """Generate SQL with real-time thinking stream."""
+            if not request.question:
+                raise HTTPException(status_code=400, detail="No question provided")
+
+            async def stream_generator():
+                cache_id = None
+                try:
+                    # Generate cache ID for this question
+                    cache_id = await self.cache.generate_id(question=request.question)
+                    
+                    # Check if the Vanna instance supports streaming
+                    if hasattr(self.vn, 'submit_prompt'):
+                        # Prepare the prompt data using the same logic as generate_sql
+                        initial_prompt = None
+                        if self.vn.config is not None:
+                            initial_prompt = self.vn.config.get("initial_prompt", None)
+                        
+                        # Get the related data for the prompt
+                        question_sql_list = await asyncio.get_event_loop().run_in_executor(
+                            None, self.vn.get_similar_question_sql, request.question
+                        )
+                        ddl_list = await asyncio.get_event_loop().run_in_executor(
+                            None, self.vn.get_related_ddl, request.question
+                        )
+                        doc_list = await asyncio.get_event_loop().run_in_executor(
+                            None, self.vn.get_related_documentation, request.question
+                        )
+                        
+                        # Create the prompt for SQL generation
+                        prompt = await asyncio.get_event_loop().run_in_executor(
+                            None, 
+                            self.vn.get_sql_prompt,
+                            initial_prompt,
+                            request.question,
+                            question_sql_list,
+                            ddl_list,
+                            doc_list
+                        )
+                        
+                        # Stream the response with thinking
+                        stream = self.vn.submit_prompt(
+                            prompt, 
+                            stream=True, 
+                            think=request.enable_thinking
+                        )
+                        
+                        if hasattr(stream, '__iter__'):
+                            # Handle streaming response
+                            for chunk_data in stream:
+                                # If this is the complete event, cache the SQL and add the ID
+                                if chunk_data.get('type') == 'complete' and chunk_data.get('full_response'):
+                                    sql = chunk_data['full_response']
+                                    
+                                    # Cache the question and SQL
+                                    await self.cache.set(id=cache_id, field="question", value=request.question)
+                                    await self.cache.set(id=cache_id, field="sql", value=sql)
+                                    
+                                    # Add the ID to the complete event
+                                    chunk_data['id'] = cache_id
+                                
+                                yield f"data: {json.dumps(chunk_data)}\n\n"
+                        else:
+                            # Fallback for non-streaming response
+                            sql = stream
+                            await self.cache.set(id=cache_id, field="question", value=request.question)
+                            await self.cache.set(id=cache_id, field="sql", value=sql)
+                            
+                            yield f"data: {json.dumps({'type': 'content', 'content': sql})}\n\n"
+                            yield f"data: {json.dumps({'type': 'complete', 'full_response': sql, 'id': cache_id})}\n\n"
+                    else:
+                        # Fallback to regular generation
+                        sql = await asyncio.get_event_loop().run_in_executor(
+                            None, 
+                            self.vn.generate_sql, 
+                            request.question, 
+                            self.allow_llm_to_see_data
+                        )
+                        
+                        # Cache the results
+                        await self.cache.set(id=cache_id, field="question", value=request.question)
+                        await self.cache.set(id=cache_id, field="sql", value=sql)
+                        
+                        yield f"data: {json.dumps({'type': 'content', 'content': sql})}\n\n"
+                        yield f"data: {json.dumps({'type': 'complete', 'full_response': sql, 'id': cache_id})}\n\n"
+                        
+                except Exception as e:
+                    error_msg = f"Error generating SQL: {str(e)}"
+                    yield f"data: {json.dumps({'type': 'error', 'error': error_msg})}\n\n"
+
+            return StreamingResponse(
+                stream_generator(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "*",
+                }
+            )
 
         @self.app.get("/api/v0/run_sql")
         async def run_sql(

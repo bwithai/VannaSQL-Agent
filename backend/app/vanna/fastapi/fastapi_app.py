@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from ..base import VannaBase
-from ..flask.assets import css_content, html_content, js_content
+from .assets import css_content, html_content, js_content
 from .auth import AsyncAuthInterface, AsyncNoAuth
 from .cache import AsyncCache, AsyncMemoryCache
 from .fastapi_api import VannaFastAPI
@@ -184,6 +184,24 @@ class VannaFastAPIApp(VannaFastAPI):
                     content="Error fetching file from remote server",
                     status_code=500
                 )
+
+        @self.app.get("/thinking-demo")
+        async def serve_thinking_demo():
+            """Serve the AI thinking demo page."""
+            demo_path = os.path.join(os.path.dirname(__file__), "thinking_demo.html")
+            if os.path.exists(demo_path):
+                return FileResponse(demo_path)
+            else:
+                return HTMLResponse(content="<h1>Thinking demo not found</h1>", status_code=404)
+
+        @self.app.get("/with-thinking")
+        async def serve_vanna_with_thinking():
+            """Serve the full Vanna UI with integrated AI thinking."""
+            thinking_ui_path = os.path.join(os.path.dirname(__file__), "vanna_with_thinking.html")
+            if os.path.exists(thinking_ui_path):
+                return FileResponse(thinking_ui_path)
+            else:
+                return HTMLResponse(content="<h1>Vanna with thinking UI not found</h1>", status_code=404)
 
         @self.app.get("/")
         @self.app.get("/{path:path}")
