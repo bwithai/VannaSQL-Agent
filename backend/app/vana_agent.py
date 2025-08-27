@@ -2,7 +2,7 @@ import os
 import requests
 from vanna.ollama import Ollama
 from vanna.chromadb import ChromaDB_VectorStore
-from coree.config import settings
+from app.core.config import settings
 
 class MyVanna(ChromaDB_VectorStore, Ollama):
     def __init__(self, config=None):

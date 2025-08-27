@@ -5,10 +5,10 @@ This will show you all your stored training knowledge including SQL, DDL, and do
 """
 
 import os
-import sys
 import warnings
-from pathlib import Path
 import json
+from app.core.config import settings
+from app.vana_agent import vn
 
 # Disable ChromaDB telemetry to avoid warnings
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
@@ -17,14 +17,7 @@ os.environ["CHROMA_TELEMETRY"] = "False"
 # Suppress ChromaDB warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="chromadb")
 
-from vanna.ollama import Ollama
-from vanna.chromadb import ChromaDB_VectorStore
-import pandas as pd
 
-class MyVanna(ChromaDB_VectorStore, Ollama):
-    def __init__(self, config=None):
-        ChromaDB_VectorStore.__init__(self, config=config)
-        Ollama.__init__(self, config=config)
 
 def display_training_statistics(df):
     """Display statistics about the training data"""
@@ -33,7 +26,7 @@ def display_training_statistics(df):
     
     if df.empty:
         print("❌ No training data found!")
-        print("   Run python hello.py to train your model first.")
+        print("   Run python train.py to train your model first.")
         return
     
     # Overall statistics
@@ -179,22 +172,25 @@ def main():
     print("This tool lets you explore your training knowledge.")
     print()
     
-    # RAG-Layer directory path
-    rag_layer_dir = "RAG-Layer"
+    # Use RAG-Layer directory from settings
+    rag_layer_dir = settings.RAG_LAYER_DIR
     
     # Check if RAG-Layer directory exists
     if not os.path.exists(rag_layer_dir):
         print(f"❌ RAG-Layer directory not found: {os.path.abspath(rag_layer_dir)}")
-        print("   Run 'python hello.py' to train your model first.")
+        print("   Run 'python train.py' to train your model first.")
         return
     
     try:
-        # Initialize Vanna with RAG-Layer path
+        # Connect to MySQL using settings (vn is already initialized with config)
         print(f"🔌 Connecting to VannaSQL-Agent (RAG-Layer: {os.path.abspath(rag_layer_dir)})...")
-        vn = MyVanna(config={
-            'model': 'phi4-mini:latest',
-            'path': rag_layer_dir  # Use RAG-Layer directory
-        })
+        vn.connect_to_mysql(
+            host=settings.MYSQL_SERVER, 
+            dbname=settings.MYSQL_DB, 
+            user=settings.MYSQL_USER, 
+            password=settings.MYSQL_PASSWORD,
+            port=settings.MYSQL_PORT
+        )
         print("✅ Connected successfully!")
         
         # Load training data
@@ -203,7 +199,7 @@ def main():
         
         if df.empty:
             print("❌ No training data found!")
-            print("   Run 'python hello.py' to train your model first.")
+            print("   Run 'python train.py' to train your model first.")
             return
         
         print(f"✅ Loaded {len(df)} training items from RAG-Layer")
@@ -273,7 +269,7 @@ def main():
                 
     except Exception as e:
         print(f"❌ Failed to initialize VannaSQL-Agent: {e}")
-        print("   Make sure you have trained your model first with 'python hello.py'")
+        print("   Make sure you have trained your model first with 'python train.py'")
 
 if __name__ == "__main__":
     main()

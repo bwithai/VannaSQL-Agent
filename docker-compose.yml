@@ -57,7 +57,7 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL?Variable not set}
     volumes:
       - ./backend/app:/app/app  # Only mount the app directory
-      - ./RAG-Layer:/app/RAG-Layer  # Mount RAG-Layer for persistent ChromaDB storage
+      - ./RAG-Layer:/RAG-Layer  # Mount RAG-Layer for persistent ChromaDB storage
       - ./dependencies/docker_pkg:/app/docker_pkg # Install Dependencies from here intead of PYPI
       - ./chroma:/root/.cache/chroma
       - ./dependencies/uv:/bin/uv

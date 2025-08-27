@@ -1,33 +1,12 @@
 #!/usr/bin/env python3
 """
-Run this after training your model with hello.py
+Run this after training your model with train.py
 """
 
 import os
 import requests
-from chromadb.config import Settings
-from vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
-from vanna.ollama import Ollama
-
-# Your class
-class MyVanna(ChromaDB_VectorStore, Ollama):
-    def __init__(self, config=None):
-        if config is None:
-            config = {}
-
-        # ollama_url = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
-        # config["ollama_host"] = ollama_url
-
-        # Choose model from env var or default
-        config["model"] = os.getenv("OLLAMA_MODEL", "phi4-mini:latest")
-        self.model = config["model"]
-
-        # Explicitly set required attribute
-        self.ollama_options = {}
-
-        # Call both base classes directly
-        ChromaDB_VectorStore.__init__(self, config=config)
-        Ollama.__init__(self, config=config)
+from app.core.config import settings
+from app.vana_agent import vn
 
 
 def get_user_confirmation(prompt: str) -> bool:
@@ -52,7 +31,7 @@ def print_help():
 
 
 def check_ollama_connection():
-    url = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
+    url = settings.OLLAMA_HOST
     try:
         response = requests.get(f"{url}/api/tags", timeout=5)
         if response.status_code == 200:
@@ -67,22 +46,33 @@ def check_ollama_connection():
 
 
 def main():
-    rag_layer_dir = "RAG-Layer"
+    rag_layer_dir = settings.RAG_LAYER_DIR
 
     if not os.path.exists(rag_layer_dir):
         print(f"❌ RAG-Layer not found: {os.path.abspath(rag_layer_dir)}")
-        print("💡 Run 'python hello.py' to train your model.")
+        print("💡 Run 'python train.py' to train your model.")
         return
 
-    # check_ollama_connection()
+    check_ollama_connection()
 
-    print("🔌 Initializing VannaSQL Agent...")
-    vn = MyVanna(config={"path": rag_layer_dir})
+    print("🔌 Connecting to MySQL database...")
+    try:
+        vn.connect_to_mysql(
+            host=settings.MYSQL_SERVER,
+            dbname=settings.MYSQL_DB,
+            user=settings.MYSQL_USER,
+            password=settings.MYSQL_PASSWORD,
+            port=settings.MYSQL_PORT
+        )
+        print("✅ Connected to MySQL database successfully!")
+    except Exception as e:
+        print(f"❌ Failed to connect to MySQL: {e}")
+        return
 
     try:
         training_data = vn.get_training_data()
         if training_data.empty:
-            print("❌ No training data found. Run hello.py first.")
+            print("❌ No training data found. Run train.py first.")
             return
 
         print(f"📊 Found {len(training_data)} training items")
