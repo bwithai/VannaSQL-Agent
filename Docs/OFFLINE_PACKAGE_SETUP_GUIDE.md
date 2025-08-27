@@ -112,6 +112,7 @@ pip install --find-links dep_pkg --no-index PyMySQL ollama psycopg2-binary db-dt
 ```bash
 # Try to install all at once (may have dependency resolution issues)
 uv pip install --find-links docker_pkg --no-index cryptography chromadb PyMySQL ollama psycopg2-binary db-dtypes pydantic_settings sqlparse plotly tabulate
+uv pip install --find-links docker_pkg/fastapi --no-index fastapi uvicorn pydantic tabulate
 ```
 
 ### Verify Installation Works

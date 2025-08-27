@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VannaSQL with AI Thinking</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.1"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        .thinking-container {
+            background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+            border-left: 4px solid #fdcb6e;
+            transition: all 0.3s ease;
+            animation: pulse-glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes pulse-glow {
+            0% { 
+                box-shadow: 0 0 5px rgba(253, 203, 110, 0.3);
+            }
+            100% { 
+                box-shadow: 0 0 20px rgba(253, 203, 110, 0.6);
+            }
+        }
+        
+        .thinking-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ddd;
+            border-top: 2px solid #e17055;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .thinking-content {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.4);
+            padding: 15px;
+            border-radius: 6px;
+            color: #2d3436;
+            scroll-behavior: smooth;
+            transition: opacity 0.1s ease;
+        }
+
+        /* Blinking cursor */
+        .typing-cursor::after {
+            content: "▋";
+            animation: blink 1s infinite step-end;
+            margin-left: 2px;
+            color: #e17055;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            50.01%, 100% { opacity: 0; }
+        }
+        
+        .sql-container {
+            background: linear-gradient(135deg, #a8e6cf 0%, #88d8a3 100%);
+            border-left: 4px solid #00b894;
+        }
+        
+        .fade-out {
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.5s ease;
+        }
+        
+        .slide-up {
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="h-full bg-gray-50">
+    <div class="min-h-full">
+        <!-- Header -->
+        <div class="bg-white shadow">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-6">
+                    <h1 class="text-3xl font-bold text-gray-900">🧠 VannaSQL with AI Thinking</h1>
+                    <div class="flex items-center space-x-4">
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" id="enableThinking" checked class="form-checkbox h-5 w-5 text-blue-600">
+                            <span class="ml-2 text-gray-700">Enable AI Thinking</span>
+                        </label>
+                        <button 
+                            id="toggleThinkingBtn"
+                            onclick="toggleThinkingContainer()"
+                            class="hidden px-3 py-1 text-sm bg-orange-100 text-orange-700 rounded-md hover:bg-orange-200 transition-colors"
+                        >
+                            Hide Thinking
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <div class="px-4 py-6 sm:px-0">
+                <!-- Question Input -->
+                <div class="bg-white shadow rounded-lg p-6 mb-6">
+                    <div class="flex space-x-4">
+                        <input 
+                            type="text" 
+                            id="questionInput" 
+                            class="flex-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            placeholder="Ask your SQL question..."
+                        >
+                        <button 
+                            id="askButton"
+                            onclick="askQuestion()"
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                            Ask Question
+                        </button>
+                    </div>
+                    <div class="mt-4 flex justify-between items-center text-sm text-gray-500">
+                        <span id="statusText">Ready to generate SQL</span>
+                        <span id="timingText"></span>
+                    </div>
+                </div>
+
+                <!-- AI Thinking Container (Hidden by default) -->
+                <div id="thinkingContainer" class="thinking-container rounded-lg p-6 mb-6 hidden">
+                    <div class="flex items-center mb-4">
+                        <div class="thinking-spinner mr-3"></div>
+                        <h3 class="text-lg font-medium text-gray-900">AI is thinking...</h3>
+                    </div>
+                    <div id="thinkingContent" class="thinking-content typing-cursor"></div>
+                </div>
+
+                <!-- Results Container -->
+                <div id="resultsContainer">
+                    <!-- SQL will be displayed here -->
+                    <div id="sqlContainer" class="hidden bg-white shadow rounded-lg p-6 mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-medium text-gray-900">Generated SQL</h3>
+                            <button onclick="copySQL()" class="text-sm text-blue-600 hover:text-blue-800">Copy SQL</button>
+                        </div>
+                        <pre id="sqlContent" class="bg-gray-100 p-4 rounded-md text-sm overflow-x-auto"></pre>
+                        <div class="mt-4 flex space-x-4">
+                            <button 
+                                onclick="runSQL()"
+                                class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                            >
+                                Run SQL
+                            </button>
+                            <button 
+                                onclick="editSQL()"
+                                class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                            >
+                                Edit SQL
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Table -->
+                    <div id="dataContainer" class="hidden bg-white shadow rounded-lg p-6 mb-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Query Results</h3>
+                        <div id="dataTable" class="overflow-x-auto"></div>
+                        <div class="mt-4">
+                            <button onclick="downloadCSV()" class="text-sm text-blue-600 hover:text-blue-800">Download CSV</button>
+                        </div>
+                    </div>
+
+                    <!-- Chart Container -->
+                    <div id="chartContainer" class="hidden bg-white shadow rounded-lg p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Chart</h3>
+                        <div id="chartDiv"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSQLId = null;
+        let currentSQL = null;
+        let currentData = null;
+        let startTime, thinkingStartTime;
+
+        async function askQuestion() {
+            const question = document.getElementById('questionInput').value.trim();
+            const enableThinking = document.getElementById('enableThinking').checked;
+            
+            if (!question) {
+                alert('Please enter a question');
+                return;
+            }
+
+            // Reset UI
+            resetUI();
+            setStatus('Connecting to AI...', '');
+            setButtonLoading(true);
+            
+            startTime = Date.now();
+
+            try {
+                if (enableThinking) {
+                    await generateSQLWithThinking(question);
+                } else {
+                    await generateSQLDirect(question);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                setStatus(`Error: ${error.message}`, '');
+            } finally {
+                setButtonLoading(false);
+            }
+        }
+
+        async function generateSQLWithThinking(question) {
+            // Show thinking container immediately to engage user
+            showThinking();
+            setStatus('🔌 Connecting to AI...', '');
+            updateThinking('🔌 Connecting to AI...\n');
+            
+            const response = await fetch('/api/v0/generate_sql_stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    question: question,
+                    enable_thinking: true
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            let thinkingContent = '';
+            let sqlContent = '';
+            let isThinking = false;
+            let hasStartedThinking = false;
+            
+            // Update status after connection
+            setStatus('📡 Connected! Waiting for AI to start thinking...', '');
+            updateThinking('📡 Connected! Waiting for AI to start thinking...\n');
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) {
+                    console.log('🏁 Stream ended');
+                    break;
+                }
+
+                const chunk = decoder.decode(value);
+                console.log('📡 Raw chunk received:', chunk);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.substring(6));
+                            console.log('📦 Received data:', data.type, data.thinking ? data.thinking.substring(0, 100) + '...' : data);
+
+                            switch (data.type) {
+                                case 'thinking':
+                                    if (!hasStartedThinking) {
+                                        hasStartedThinking = true;
+                                        isThinking = true;
+                                        thinkingStartTime = Date.now();
+                                        setStatus('🧠 AI is thinking...', '');
+                                        // Clear the waiting message and start fresh with actual thinking
+                                        thinkingContent = "🧠 AI Thinking Process:\n\n";
+                                        console.log('🧠 Started actual thinking display');
+                                    }
+                                    // Append new thinking content immediately (each chunk is a piece of the thought)
+                                    if (data.thinking) {
+                                        updateThinking(data.thinking);
+                                        console.log('🧠 Thinking chunk added:', data.thinking.length, 'chars. Total:', thinkingContent.length);
+                                    }
+                                    break;
+
+                                case 'thinking_end':
+                                    const thinkingTime = ((Date.now() - thinkingStartTime) / 1000).toFixed(1);
+                                    updateThinking("\n\n✅ Done thinking! Now generating SQL...\n");
+                                    document.getElementById('thinkingContent').classList.remove("typing-cursor");
+                                    setStatus('✨ Thinking complete! Now generating SQL...', `Thinking: ${thinkingTime}s`);
+                                    break;
+
+                                case 'content':
+                                    sqlContent += data.content;
+                                    break;
+
+                                case 'complete':
+                                    const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                                    // Store the SQL ID from the complete event
+                                    if (data.id) {
+                                        currentSQLId = data.id;
+                                    }
+                                    
+                                    // Use extracted SQL if available, otherwise use full response or accumulated content
+                                    const finalSQL = data.extracted_sql || sqlContent || data.full_response;
+                                    
+                                    // Log for debugging
+                                    console.log('Complete event received:', {
+                                        extracted_sql: data.extracted_sql,
+                                        full_response: data.full_response ? data.full_response.substring(0, 100) + '...' : null,
+                                        accumulated_content: sqlContent.substring(0, 100) + '...',
+                                        from_cache: data.from_cache,
+                                        final_sql_used: finalSQL.substring(0, 100) + '...'
+                                    });
+                                    
+                                    // Reset thinking state
+                                    isThinking = false;
+                                    hasStartedThinking = false;
+                                    
+                                    await hideThinkingAndShowSQL(finalSQL, totalTime);
+                                    
+                                    // Show cache indicator if applicable
+                                    if (data.from_cache) {
+                                        setStatus('💾 SQL retrieved from cache! Running automatically...', `Total: ${totalTime}s`);
+                                    } else {
+                                        setStatus('✅ SQL generated! Running automatically...', `Total: ${totalTime}s`);
+                                    }
+                                    
+                                    // Auto-run SQL after thinking completes
+                                    setTimeout(() => {
+                                        runSQL();
+                                    }, data.from_cache ? 500 : 1500); // Faster for cached results
+                                    break;
+
+                                case 'error':
+                                    throw new Error(data.error);
+                            }
+                        } catch (e) {
+                            console.error('Error parsing JSON:', e, 'Line was:', line);
+                        }
+                    } else if (line.trim() !== '') {
+                        console.log('📝 Non-data line:', line);
+                    }
+                }
+            }
+        }
+
+                 async function generateSQLDirect(question) {
+             const response = await fetch(`/api/v0/generate_sql?question=${encodeURIComponent(question)}`);
+
+             if (!response.ok) {
+                 throw new Error(`HTTP error! status: ${response.status}`);
+             }
+
+             const data = await response.json();
+             const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+             
+             currentSQLId = data.id;
+             currentSQL = data.text;
+             
+             // Show cache indicator if applicable
+             if (data.from_cache) {
+                 setStatus('SQL retrieved from cache! Running automatically...', `Total: ${totalTime}s`);
+             } else {
+                 setStatus('SQL generated! Running automatically...', `Total: ${totalTime}s`);
+             }
+             
+             showSQL(data.text, totalTime);
+             
+             // Auto-run SQL after generation (faster for cached results)
+             setTimeout(() => {
+                 runSQL();
+             }, data.from_cache ? 500 : 1000);
+         }
+
+        async function hideThinkingAndShowSQL(sql, totalTime) {
+            // Fade out thinking container
+            const thinkingContainer = document.getElementById('thinkingContainer');
+            thinkingContainer.classList.add('fade-out');
+            
+            // Wait for fade out animation
+            setTimeout(() => {
+                thinkingContainer.classList.add('hidden');
+                thinkingContainer.classList.remove('fade-out');
+                
+                // Show SQL with slide up animation
+                currentSQL = sql;
+                showSQL(sql, totalTime);
+                
+                                 setStatus('SQL generated! Running automatically...', `Total: ${totalTime}s`);
+            }, 500);
+        }
+
+        function showThinking() {
+            const container = document.getElementById('thinkingContainer');
+            const toggleBtn = document.getElementById('toggleThinkingBtn');
+            if (!container) {
+                console.error('❌ thinkingContainer element not found!');
+                return;
+            }
+            container.classList.remove('hidden');
+            container.style.display = 'block'; // Force display
+            // Ensure the container is visible and smooth
+            container.classList.remove('fade-out');
+            // Show toggle button
+            if (toggleBtn) {
+                toggleBtn.classList.remove('hidden');
+                toggleBtn.textContent = 'Hide Thinking';
+            }
+            console.log('👁️ Thinking container is now visible immediately', container.classList);
+        }
+
+        function hideThinking() {
+            const container = document.getElementById('thinkingContainer');
+            const toggleBtn = document.getElementById('toggleThinkingBtn');
+            if (container) {
+                container.classList.add('hidden');
+                container.style.display = 'none';
+            }
+            if (toggleBtn) {
+                toggleBtn.textContent = 'Show Thinking';
+            }
+        }
+
+        function toggleThinkingContainer() {
+            const container = document.getElementById('thinkingContainer');
+            const toggleBtn = document.getElementById('toggleThinkingBtn');
+            if (!container || !toggleBtn) return;
+
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                container.style.display = 'block';
+                toggleBtn.textContent = 'Hide Thinking';
+            } else {
+                container.classList.add('hidden');
+                container.style.display = 'none';
+                toggleBtn.textContent = 'Show Thinking';
+            }
+        }
+
+        function updateThinking(newChunk) {
+            const thinkingElement = document.getElementById('thinkingContent');
+            if (!thinkingElement) {
+                console.error('❌ thinkingContent element not found!');
+                return;
+            }
+
+            // Append new chunk instead of replacing
+            thinkingElement.textContent += newChunk;
+
+            // Keep cursor blinking by re-applying class
+            if (!thinkingElement.classList.contains("typing-cursor")) {
+                thinkingElement.classList.add("typing-cursor");
+            }
+
+            // Auto-scroll to bottom to show new content
+            thinkingElement.scrollTop = thinkingElement.scrollHeight;
+
+            console.log('💭 Added chunk:', newChunk.length, 'chars. Total now:', thinkingElement.textContent.length);
+        }
+
+        function showSQL(sql, totalTime) {
+            document.getElementById('sqlContent').textContent = sql;
+            document.getElementById('sqlContainer').classList.remove('hidden');
+            document.getElementById('sqlContainer').classList.add('slide-up');
+        }
+
+                 async function runSQL() {
+             if (!currentSQL) return;
+
+             setStatus('Running SQL...', '');
+
+             try {
+                 // Check if we have the SQL ID (should be available from the stream)
+                 if (!currentSQLId) {
+                     throw new Error('No SQL ID available. Please regenerate the SQL.');
+                 }
+
+                 // Run the SQL using the cached ID
+                 const response = await fetch(`/api/v0/run_sql?id=${currentSQLId}`);
+                 
+                 if (!response.ok) {
+                     throw new Error(`Failed to run SQL: ${response.status} - ${response.statusText}`);
+                 }
+                 
+                 const data = await response.json();
+                 console.log('SQL execution result:', data); // Debug log
+
+                 if (data.type === 'df' && data.df) {
+                     // Parse the JSON string if it's a string
+                     let parsedData = data.df;
+                     if (typeof data.df === 'string') {
+                         parsedData = JSON.parse(data.df);
+                     }
+                     
+                     currentData = parsedData;
+                     showDataTable(parsedData);
+                     setStatus('SQL executed successfully', '');
+                     
+                     // Generate chart if data is suitable
+                     if (parsedData && parsedData.length > 0) {
+                         generateChart(parsedData);
+                     }
+                 } else if (data.type === 'error') {
+                     setStatus(`SQL Error: ${data.error}`, '');
+                 } else {
+                     setStatus('SQL executed, but no data returned', '');
+                     console.log('Unexpected response format:', data);
+                 }
+             } catch (error) {
+                 console.error('Error running SQL:', error);
+                 setStatus(`Error running SQL: ${error.message}`, '');
+             }
+         }
+
+        function showDataTable(data) {
+            if (!data || data.length === 0) return;
+
+            const container = document.getElementById('dataTable');
+            const headers = Object.keys(data[0]);
+            
+            let html = '<table class="min-w-full divide-y divide-gray-200">';
+            html += '<thead class="bg-gray-50"><tr>';
+            headers.forEach(header => {
+                html += `<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${header}</th>`;
+            });
+            html += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+            
+            data.slice(0, 100).forEach((row, index) => { // Show first 100 rows
+                html += `<tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">`;
+                headers.forEach(header => {
+                    html += `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${row[header] || ''}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            
+            if (data.length > 100) {
+                html += `<p class="text-sm text-gray-500 mt-2">Showing first 100 rows of ${data.length} total rows.</p>`;
+            }
+            
+            container.innerHTML = html;
+            document.getElementById('dataContainer').classList.remove('hidden');
+        }
+
+        function generateChart(data) {
+            if (!data || data.length === 0) return;
+
+            const headers = Object.keys(data[0]);
+            const numericColumns = headers.filter(header => 
+                data.some(row => !isNaN(parseFloat(row[header])))
+            );
+
+            if (numericColumns.length === 0) return;
+
+            // Simple bar chart
+            const xColumn = headers[0]; // First column as x-axis
+            const yColumn = numericColumns[0]; // First numeric column as y-axis
+
+            const trace = {
+                x: data.map(row => row[xColumn]),
+                y: data.map(row => parseFloat(row[yColumn]) || 0),
+                type: 'bar',
+                marker: { color: 'rgb(59, 130, 246)' }
+            };
+
+            const layout = {
+                title: `${yColumn} by ${xColumn}`,
+                xaxis: { title: xColumn },
+                yaxis: { title: yColumn },
+                margin: { t: 50, l: 50, r: 50, b: 50 }
+            };
+
+            Plotly.newPlot('chartDiv', [trace], layout);
+            document.getElementById('chartContainer').classList.remove('hidden');
+        }
+
+        function copySQL() {
+            if (!currentSQL) return;
+            
+            navigator.clipboard.writeText(currentSQL).then(() => {
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            });
+        }
+
+        function editSQL() {
+            // Simple SQL editor - in production, you might want a proper code editor
+            const newSQL = prompt('Edit SQL:', currentSQL);
+            if (newSQL && newSQL !== currentSQL) {
+                currentSQL = newSQL;
+                document.getElementById('sqlContent').textContent = newSQL;
+            }
+        }
+
+        function downloadCSV() {
+            if (!currentData) return;
+
+            const headers = Object.keys(currentData[0]);
+            let csv = headers.join(',') + '\n';
+            
+            currentData.forEach(row => {
+                const values = headers.map(header => {
+                    const value = row[header] || '';
+                    return `"${value.toString().replace(/"/g, '""')}"`;
+                });
+                csv += values.join(',') + '\n';
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'query_results.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        function resetUI() {
+            // Hide all containers
+            const thinkingContainer = document.getElementById('thinkingContainer');
+            const sqlContainer = document.getElementById('sqlContainer');
+            const dataContainer = document.getElementById('dataContainer');
+            const chartContainer = document.getElementById('chartContainer');
+            const toggleBtn = document.getElementById('toggleThinkingBtn');
+            
+            thinkingContainer.classList.add('hidden');
+            thinkingContainer.style.display = 'none';
+            sqlContainer.classList.add('hidden');
+            dataContainer.classList.add('hidden');
+            chartContainer.classList.add('hidden');
+            
+            // Hide toggle button until thinking starts
+            if (toggleBtn) {
+                toggleBtn.classList.add('hidden');
+            }
+            
+            // Clear content
+            document.getElementById('thinkingContent').textContent = '';
+            document.getElementById('sqlContent').textContent = '';
+            
+            // Reset variables
+            currentSQLId = null;
+            currentSQL = null;
+            currentData = null;
+            
+            console.log('🔄 UI reset completed');
+        }
+
+        function setStatus(status, timing) {
+            document.getElementById('statusText').textContent = status;
+            document.getElementById('timingText').textContent = timing;
+        }
+
+        function setButtonLoading(loading) {
+            const button = document.getElementById('askButton');
+            button.disabled = loading;
+            button.textContent = loading ? 'Generating...' : 'Ask Question';
+        }
+
+        // Enter key support
+        document.getElementById('questionInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                askQuestion();
+            }
+        });
+
+        // Set default question
+        document.getElementById('questionInput').value = '';
+    </script>
+</body>
+</html>

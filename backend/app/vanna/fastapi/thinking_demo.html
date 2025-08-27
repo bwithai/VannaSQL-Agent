@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VannaSQL with AI Thinking</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 16px;
+        }
+        
+        .input-section {
+            margin-bottom: 30px;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        #questionInput {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        #questionInput:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .options {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .response-section {
+            border-top: 2px solid #f0f0f0;
+            padding-top: 20px;
+        }
+        
+        .thinking-container {
+            background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #fdcb6e;
+            display: none;
+        }
+        
+        .thinking-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-weight: 600;
+            color: #2d3436;
+        }
+        
+        .thinking-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ddd;
+            border-top: 2px solid #e17055;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .thinking-content {
+            background: rgba(255, 255, 255, 0.3);
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            color: #2d3436;
+        }
+        
+        .sql-container {
+            background: linear-gradient(135deg, #a8e6cf 0%, #88d8a3 100%);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #00b894;
+            display: none;
+        }
+        
+        .sql-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-weight: 600;
+            color: #2d3436;
+        }
+        
+        .sql-content {
+            background: rgba(255, 255, 255, 0.4);
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            color: #2d3436;
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .error-container {
+            background: linear-gradient(135deg, #ff7675 0%, #fd79a8 100%);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #e84393;
+            color: white;
+            display: none;
+        }
+        
+        .copy-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #2d3436;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+        
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 VannaSQL with AI Thinking</h1>
+            <p>Watch the AI think through your SQL questions in real-time</p>
+        </div>
+        
+        <div class="input-section">
+            <div class="input-group">
+                <input 
+                    type="text" 
+                    id="questionInput" 
+                    placeholder="Ask your SQL question... (e.g., 'Find top 5 customers by revenue')"
+                >
+                <button class="btn btn-primary" id="generateBtn" onclick="generateSQL()">
+                    Generate SQL
+                </button>
+            </div>
+            
+            <div class="options">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="enableThinking" checked>
+                    <label for="enableThinking">Enable AI Thinking</label>
+                </div>
+                <div class="status-bar">
+                    <span id="statusText">Ready to generate SQL</span>
+                    <span id="timingText"></span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="response-section">
+            <div class="thinking-container" id="thinkingContainer">
+                <div class="thinking-header">
+                    <div class="thinking-spinner"></div>
+                    <span>AI is thinking...</span>
+                </div>
+                <div class="thinking-content" id="thinkingContent"></div>
+            </div>
+            
+            <div class="sql-container" id="sqlContainer">
+                <div class="sql-header">
+                    <span>🎯 Generated SQL Query</span>
+                    <button class="copy-btn" onclick="copySQL()">Copy SQL</button>
+                </div>
+                <div class="sql-content" id="sqlContent"></div>
+            </div>
+            
+            <div class="error-container" id="errorContainer">
+                <h4>❌ Error</h4>
+                <div id="errorContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let startTime;
+        let thinkingStartTime;
+        
+        async function generateSQL() {
+            const question = document.getElementById('questionInput').value.trim();
+            const enableThinking = document.getElementById('enableThinking').checked;
+            
+            if (!question) {
+                alert('Please enter a question');
+                return;
+            }
+            
+            // Reset UI
+            resetUI();
+            setStatus('Connecting to AI...', '');
+            
+            // Disable button
+            const generateBtn = document.getElementById('generateBtn');
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating...';
+            
+            startTime = Date.now();
+            
+            try {
+                const response = await fetch('/api/v0/generate_sql_stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        enable_thinking: enableThinking
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                let thinkingContent = '';
+                let sqlContent = '';
+                let isThinking = false;
+                
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.substring(6));
+                                
+                                switch (data.type) {
+                                    case 'thinking':
+                                        if (!isThinking) {
+                                            isThinking = true;
+                                            thinkingStartTime = Date.now();
+                                            showThinkingContainer();
+                                            setStatus('AI is thinking...', '');
+                                        }
+                                        thinkingContent += data.thinking;
+                                        updateThinkingContent(thinkingContent);
+                                        break;
+                                        
+                                    case 'thinking_end':
+                                        const thinkingTime = ((Date.now() - thinkingStartTime) / 1000).toFixed(1);
+                                        setStatus('Generating SQL...', `Thinking: ${thinkingTime}s`);
+                                        break;
+                                        
+                                    case 'content':
+                                        if (!document.getElementById('sqlContainer').style.display || 
+                                            document.getElementById('sqlContainer').style.display === 'none') {
+                                            showSQLContainer();
+                                        }
+                                        sqlContent += data.content;
+                                        updateSQLContent(sqlContent);
+                                        break;
+                                        
+                                    case 'complete':
+                                        const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                                        setStatus('Complete!', `Total: ${totalTime}s`);
+                                        break;
+                                        
+                                    case 'error':
+                                        showError(data.error);
+                                        break;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing JSON:', e);
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showError(`Connection error: ${error.message}`);
+            } finally {
+                // Re-enable button
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate SQL';
+            }
+        }
+        
+        function resetUI() {
+            document.getElementById('thinkingContainer').style.display = 'none';
+            document.getElementById('sqlContainer').style.display = 'none';
+            document.getElementById('errorContainer').style.display = 'none';
+            document.getElementById('thinkingContent').textContent = '';
+            document.getElementById('sqlContent').textContent = '';
+        }
+        
+        function showThinkingContainer() {
+            document.getElementById('thinkingContainer').style.display = 'block';
+        }
+        
+        function showSQLContainer() {
+            document.getElementById('sqlContainer').style.display = 'block';
+        }
+        
+        function updateThinkingContent(content) {
+            const thinkingElement = document.getElementById('thinkingContent');
+            thinkingElement.textContent = content;
+            thinkingElement.scrollTop = thinkingElement.scrollHeight;
+        }
+        
+        function updateSQLContent(content) {
+            document.getElementById('sqlContent').textContent = content;
+        }
+        
+        function showError(error) {
+            document.getElementById('errorContent').textContent = error;
+            document.getElementById('errorContainer').style.display = 'block';
+        }
+        
+        function setStatus(status, timing) {
+            document.getElementById('statusText').textContent = status;
+            document.getElementById('timingText').textContent = timing;
+        }
+        
+        function copySQL() {
+            const sqlContent = document.getElementById('sqlContent').textContent;
+            navigator.clipboard.writeText(sqlContent).then(() => {
+                const copyBtn = document.querySelector('.copy-btn');
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                }, 2000);
+            });
+        }
+        
+        // Allow Enter key to submit
+        document.getElementById('questionInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                generateSQL();
+            }
+        });
+    </script>
+</body>
+</html>

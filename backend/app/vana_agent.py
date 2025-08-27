@@ -18,6 +18,7 @@ class MyVanna(ChromaDB_VectorStore, Ollama):
 
         # Choose model from env var or default
         config["model"] = settings.OLLAMA_MODEL
+        config["ollama_timeout"] = 900.0
         self.model = config["model"]
 
         # Explicitly set required attribute
