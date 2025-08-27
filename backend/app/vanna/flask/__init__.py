@@ -325,6 +325,8 @@ class VannaFlaskAPI:
                       type: string
                     text:
                       type: string
+                    from_cache:
+                      type: boolean
             """
             question = flask.request.args.get("question")
 
@@ -332,10 +334,24 @@ class VannaFlaskAPI:
                 return jsonify({"type": "error", "error": "No question provided"})
 
             id = self.cache.generate_id(question=question)
-            sql = vn.generate_sql(question=question, allow_llm_to_see_data=self.allow_llm_to_see_data)
+            
+            # Check if we have cached SQL first
+            was_cached = False
+            if hasattr(vn, 'get_exact_question_sql'):
+                cached_sql = vn.get_exact_question_sql(question)
+                if cached_sql:
+                    sql = cached_sql
+                    was_cached = True
+                    vn.log(f"🎯 Using cached SQL for question: {question[:50]}...", "RAG Cache")
+                else:
+                    sql = vn._generate_sql_bypass_cache(question, allow_llm_to_see_data=self.allow_llm_to_see_data)
+            else:
+                # Fallback to normal generation if exact matching not available
+                sql = vn.generate_sql(question=question, allow_llm_to_see_data=self.allow_llm_to_see_data)
 
             self.cache.set(id=id, field="question", value=question)
             self.cache.set(id=id, field="sql", value=sql)
+            self.cache.set(id=id, field="was_cached", value=was_cached)
 
             if vn.is_sql_valid(sql=sql):
                 return jsonify(
@@ -343,6 +359,7 @@ class VannaFlaskAPI:
                         "type": "sql",
                         "id": id,
                         "text": sql,
+                        "from_cache": was_cached,
                     }
                 )
             else:
@@ -351,6 +368,7 @@ class VannaFlaskAPI:
                         "type": "text",
                         "id": id,
                         "text": sql,
+                        "from_cache": was_cached,
                     }
                 )
 

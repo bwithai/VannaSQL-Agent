@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from ..base import VannaBase
-from ..flask.assets import css_content, html_content, js_content
+from .assets import css_content, html_content, js_content
 from .auth import AsyncAuthInterface, AsyncNoAuth
 from .cache import AsyncCache, AsyncMemoryCache
 from .fastapi_api import VannaFastAPI
