@@ -19,17 +19,6 @@ def get_user_confirmation(prompt: str) -> bool:
         print("Please enter 'y' or 'n'.")
 
 
-def print_help():
-    print("""
-💡 Example questions:
-- What are total inflows by year?
-- List all formations and their inflows.
-- Show expense trends over time.
-- Get user count by role.
-- What’s the highest spending unit?
-""")
-
-
 def check_ollama_connection():
     url = settings.OLLAMA_HOST
     try:
@@ -84,9 +73,6 @@ def main():
             if question.lower() in ("quit", "exit", "q"):
                 print("👋 Goodbye!")
                 break
-            if question.lower() == "help":
-                print_help()
-                continue
             if not question:
                 continue
 

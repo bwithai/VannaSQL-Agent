@@ -1,6 +1,7 @@
 # VannaSQL Agent
 
 A natural language to SQL converter using Vanna.AI with Ollama and ChromaDB for local database querying.
+![Flowchart](./docs/architecture.svg)
 
 ## Overview
 
