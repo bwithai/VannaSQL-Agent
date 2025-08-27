@@ -29,9 +29,9 @@ class VannaFastAPIApp(VannaFastAPI):
         cache: Optional[AsyncCache] = None,
         auth: Optional[AsyncAuthInterface] = None,
         allow_llm_to_see_data: bool = False,
-        logo: str = "https://img.vanna.ai/vanna-flask.svg",
-        title: str = "Welcome to Vanna.AI",
-        subtitle: str = "Your AI-powered copilot for SQL queries.",
+        logo: str = "/assets/vanna.png",
+        title: str = "Welcome to MySQL-Agent",
+        subtitle: str = "Your powered SQL queries Automation.",
         show_training_data: bool = True,
         suggested_questions: bool = True,
         sql: bool = True,
@@ -149,40 +149,27 @@ class VannaFastAPIApp(VannaFastAPI):
             if ".js" in filename:
                 return Response(content=js_content, media_type="text/javascript")
 
+            if filename == "vanna.png":
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                png_path = os.path.join(current_dir, "vanna.png")
+                if os.path.exists(png_path):
+                    return FileResponse(png_path, media_type="image/png")
+
             # Return 404
             return Response(content="File not found", status_code=404)
 
-        @self.app.get("/vanna.svg")
-        async def proxy_vanna_svg():
-            """Proxy the vanna.svg file to the remote server."""
-            try:
-                remote_url = "https://vanna.ai/img/vanna.svg"
-                response = requests.get(remote_url, stream=True, timeout=10)
-
-                if response.status_code == 200:
-                    return Response(
-                        content=response.content,
-                        status_code=response.status_code,
-                        headers={
-                            name: value
-                            for name, value in response.headers.items()
-                            if name.lower() not in [
-                                "content-encoding",
-                                "content-length", 
-                                "transfer-encoding",
-                                "connection"
-                            ]
-                        }
-                    )
-                else:
-                    return Response(
-                        content="Error fetching file from remote server",
-                        status_code=response.status_code
-                    )
-            except Exception:
+        @self.app.get("/vanna.png")
+        async def serve_vanna_png():
+            """Serve the local vanna.png file."""
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            png_path = os.path.join(current_dir, "vanna.png")
+            
+            if os.path.exists(png_path):
+                return FileResponse(png_path, media_type="image/png")
+            else:
                 return Response(
-                    content="Error fetching file from remote server",
-                    status_code=500
+                    content="PNG file not found",
+                    status_code=404
                 )
 
         @self.app.get("/")

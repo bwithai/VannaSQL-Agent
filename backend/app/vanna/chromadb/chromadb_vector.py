@@ -207,7 +207,7 @@ class ChromaDB_VectorStore(VannaBase):
             return False
 
     @staticmethod
-    def _extract_documents(query_results) -> list:
+    def _extract_documents(query_results, mcj="qsql") -> list:
         """
         Static method to extract the documents from the results of a query.
 
@@ -218,17 +218,39 @@ class ChromaDB_VectorStore(VannaBase):
             List[str] or None: The extracted documents, or an empty list or
             single document if an error occurred.
         """
+        print("+"*50)
+        print(f"-----------{ mcj }------------")
+        print(query_results)
+        print("+"*50)
         if query_results is None:
             return []
 
         if "documents" in query_results:
             documents = query_results["documents"]
+            distances = query_results.get("distances", [])
 
+            # Flatten docs if nested
             if len(documents) == 1 and isinstance(documents[0], list):
                 try:
                     documents = [json.loads(doc) for doc in documents[0]]
-                except Exception as e:
-                    return documents[0]
+                except Exception:
+                    documents = documents[0]
+
+            # --- Apply distance filter ---
+            if mcj == "yes" and distances:
+                filtered_pairs = []
+                for doc_list, dist_list in zip([documents], distances):  # wrap in list so zip works
+                    for d, dist in zip(doc_list, dist_list):
+                        if dist <= 0.9:
+                            filtered_pairs.append((d, dist))
+
+                # Sort by distance (nearest first)
+                filtered_pairs.sort(key=lambda x: x[1])
+
+                # Keep max 5
+                filtered_docs = [d for d, _ in filtered_pairs[:5]]
+
+                return filtered_docs
 
             return documents
 
@@ -255,7 +277,7 @@ class ChromaDB_VectorStore(VannaBase):
             self.sql_collection.query(
                 query_texts=[question],
                 n_results=self.n_results_sql,
-            )
+            ), "yes"
         )
 
     def get_related_ddl(self, question: str, **kwargs) -> list:

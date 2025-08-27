@@ -1219,7 +1219,7 @@ class VannaFlaskApp(VannaFlaskAPI):
             debug: Show the debug console. Defaults to True.
             allow_llm_to_see_data: Whether to allow the LLM to see data. Defaults to False.
             logo: The logo to display in the UI. Defaults to the Vanna logo.
-            title: The title to display in the UI. Defaults to "Welcome to Vanna.AI".
+            title: The title to display in the UI. Defaults to "Welcome to MySQL-Agent".
             subtitle: The subtitle to display in the UI. Defaults to "Your AI-powered copilot for SQL queries.".
             show_training_data: Whether to show the training data in the UI. Defaults to True.
             suggested_questions: Whether to show suggested questions in the UI. Defaults to True.

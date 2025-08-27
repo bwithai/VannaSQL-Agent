@@ -29,11 +29,11 @@ class DisciplineData(SQLModel, table=True):
         ),
     )
 
-    initiation_date: Optional[datetime] = Field(
+    date: Optional[datetime] = Field(
         default=None,
         sa_column=Column(
             DateTime,
-            comment="Exact initiation datetime when case was initiated (yyyy-mm-dd 00:00:00)",
+            comment="Exact initiation datetime when punishment was initiated (yyyy-mm-dd 00:00:00)",
         ),
     )
 
@@ -73,16 +73,11 @@ class DisciplineData(SQLModel, table=True):
         sa_column=Column(String(255), comment="Name of the person", index=True),
     )
 
-    parent_unit: Optional[str] = Field(
-        default=None,
-        sa_column=Column(String(255), comment="First joining unit after  passing out academy"),
-    )
-
     initiated_by: Optional[str] = Field(
         default=None,
         sa_column=Column(
             String(255),
-            comment="Unit/formation who initiated this award (organization name)",
+            comment="Unit/formation who initiated this punishment (organization name)",
         ),
     )
 
@@ -97,19 +92,19 @@ class DisciplineData(SQLModel, table=True):
         ),
     )
 
-    initiation_year: Optional[int] = Field(
+    year: Optional[int] = Field(
         default=None,
-        sa_column=Column(Integer, comment="Year when the case was initiated (e.g., 2020)", index=True),
+        sa_column=Column(Integer, comment="Year when the punishment was initiated (e.g., 2020)", index=True),
     )
 
     svc_bracket: Optional[int] = Field(
         default=None,
-        sa_column=Column(Integer, comment="Service in years at time of award (e.g., 5)"),
+        sa_column=Column(Integer, comment="Service in years at time when punishment was given (e.g., 5)"),
     )
 
-    awardee_unit: Optional[str] = Field(
+    unit: Optional[str] = Field(
         default=None,
-        sa_column=Column(String(255), comment="Unit where the person received the award"),
+        sa_column=Column(String(255), comment="Unit where the person received the punishment"),
     )
 
 
@@ -156,54 +151,54 @@ def seed_discipline_data(session) -> None:
             svc_bracket=5,
             awardee_unit="15th Artillery Brigade"
         ),
-        # DisciplineData(
-        #     doc=date(2016, 8, 20),
-        #     cat="Negligence of duty",
-        #     initiation_date=datetime(2021, 11, 5, 9, 15, 0),
-        #     arm="Armoured Corps",
-        #     course="ACC-2016-C",
-        #     svc_no="MJ-54321",
-        #     rank="Major",
-        #     name="Vikram Sharma",
-        #     parent_unit="17th Poona Horse",
-        #     initiated_by="HQ Southern Command",
-        #     award="Reprimand",
-        #     initiation_year=2021,
-        #     svc_bracket=5,
-        #     awardee_unit="31st Armoured Division"
-        # ),
-        # DisciplineData(
-        #     doc=date(2017, 4, 3),
-        #     cat="Misconduct",
-        #     initiation_date=datetime(2022, 1, 18, 16, 45, 0),
-        #     arm="Engineers",
-        #     course="MES-2017-D",
-        #     svc_no="CP-98765",
-        #     rank="Colonel",
-        #     name="Amit Patel",
-        #     parent_unit="2nd Engineer Regiment",
-        #     initiated_by="HQ Eastern Command",
-        #     award="Censure",
-        #     initiation_year=2022,
-        #     svc_bracket=5,
-        #     awardee_unit="Corps of Engineers"
-        # ),
-        # DisciplineData(
-        #     doc=date(2019, 1, 25),
-        #     cat="Insubordination",
-        #     initiation_date=datetime(2024, 2, 10, 11, 20, 0),
-        #     arm="Signals",
-        #     course="SIG-2019-E",
-        #     svc_no="SG-13579",
-        #     rank="Subedar",
-        #     name="Ramesh Chandra",
-        #     parent_unit="7th Signal Regiment",
-        #     initiated_by="Corps HQ XIV Corps",
-        #     award="Reduction in rank",
-        #     initiation_year=2024,
-        #     svc_bracket=5,
-        #     awardee_unit="Signal Training Establishment"
-        # )
+        DisciplineData(
+            doc=date(2016, 8, 20),
+            cat="Negligence of duty",
+            initiation_date=datetime(2021, 11, 5, 9, 15, 0),
+            arm="Armoured Corps",
+            course="ACC-2016-C",
+            svc_no="MJ-54321",
+            rank="Major",
+            name="Vikram Sharma",
+            parent_unit="17th Poona Horse",
+            initiated_by="HQ Southern Command",
+            award="Reprimand",
+            initiation_year=2021,
+            svc_bracket=5,
+            awardee_unit="31st Armoured Division"
+        ),
+        DisciplineData(
+            doc=date(2017, 4, 3),
+            cat="Misconduct",
+            initiation_date=datetime(2022, 1, 18, 16, 45, 0),
+            arm="Engineers",
+            course="MES-2017-D",
+            svc_no="CP-98765",
+            rank="Colonel",
+            name="Amit Patel",
+            parent_unit="2nd Engineer Regiment",
+            initiated_by="HQ Eastern Command",
+            award="Censure",
+            initiation_year=2022,
+            svc_bracket=5,
+            awardee_unit="Corps of Engineers"
+        ),
+        DisciplineData(
+            doc=date(2019, 1, 25),
+            cat="Insubordination",
+            initiation_date=datetime(2024, 2, 10, 11, 20, 0),
+            arm="Signals",
+            course="SIG-2019-E",
+            svc_no="SG-13579",
+            rank="Subedar",
+            name="Ramesh Chandra",
+            parent_unit="7th Signal Regiment",
+            initiated_by="Corps HQ XIV Corps",
+            award="Reduction in rank",
+            initiation_year=2024,
+            svc_bracket=5,
+            awardee_unit="Signal Training Establishment"
+        )
     ]
     
     session.add_all(dummy_records)
