@@ -138,11 +138,27 @@ class VannaFastAPIApp(VannaFastAPI):
         @self.app.get("/assets/{filename:path}")
         async def proxy_assets(filename: str):
             """Serve static assets."""
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            
             if self.assets_folder:
                 file_path = os.path.join(self.assets_folder, filename)
                 if os.path.exists(file_path):
                     return FileResponse(file_path)
 
+            # Check for local offline assets first
+            local_asset_path = os.path.join(current_dir, filename)
+            if os.path.exists(local_asset_path):
+                # Determine content type based on file extension
+                if filename.endswith('.js'):
+                    return FileResponse(local_asset_path, media_type="text/javascript")
+                elif filename.endswith('.css') or 'Roboto_Slab' in filename:
+                    return FileResponse(local_asset_path, media_type="text/css")
+                elif filename.endswith('.png'):
+                    return FileResponse(local_asset_path, media_type="image/png")
+                else:
+                    return FileResponse(local_asset_path)
+
+            # Fallback to embedded content
             if ".css" in filename:
                 return Response(content=css_content, media_type="text/css")
 
@@ -150,7 +166,6 @@ class VannaFastAPIApp(VannaFastAPI):
                 return Response(content=js_content, media_type="text/javascript")
 
             if filename == "vanna.png":
-                current_dir = os.path.dirname(os.path.abspath(__file__))
                 png_path = os.path.join(current_dir, "vanna.png")
                 if os.path.exists(png_path):
                     return FileResponse(png_path, media_type="image/png")
